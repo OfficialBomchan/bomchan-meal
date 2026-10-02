@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: bomchan-meal
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+      - key: DATABASE_URL   # 외부 무료 Postgres(Neon 등)의 연결 문자열 — 대시보드에서 직접 입력
+        sync: false
