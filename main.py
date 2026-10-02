@@ -47,6 +47,9 @@ def init_db():
         c.q("CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT)")
         now = datetime.now(KST)
         c.q("INSERT INTO meta VALUES('start',?) ON CONFLICT DO NOTHING", (now.date().isoformat(),))
+        st = c.q("SELECT v FROM meta WHERE k='start'").fetchone()["v"]
+        if st == now.date().isoformat() and now.hour >= CUTOFF:
+            c.q("INSERT INTO done VALUES(?) ON CONFLICT DO NOTHING", (st,))  # 시작일이 08:00 이후면 그날은 패널티 제외
         c.commit()
 
 def now_kst(): return datetime.now(KST)
@@ -69,8 +72,7 @@ def snapshot():
         while d <= now.date():
             passed = d < now.date() or now.hour >= CUTOFF
             ds = d.isoformat()
-            skip = d == start and d == now.date()
-            if passed and workday(d) and not skip:
+            if passed and workday(d):
                 cur = c.q("INSERT INTO done VALUES(?) ON CONFLICT DO NOTHING", (ds,))
                 if cur.rowcount == 1:
                     got = {r["member"] for r in c.q("SELECT member FROM meals WHERE d=? AND status IN ('먹음','안먹음')", (ds,)).fetchall()}
