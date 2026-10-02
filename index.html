@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>봄찬 점심 체크</title>
+<style>
+:root{
+  --green:#2f8f3a; --green-dark:#1f6b29; --green-light:#e8f4ea; --green-line:#cfe5d2;
+  --eat:#2f8f3a; --undecided:#e0a100; --skip:#8a8f8a;
+  --bg:#f6faf6; --text:#1d2a1f; --muted:#6b786d;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;background:var(--bg);color:var(--text)}
+header{background:var(--green);color:#fff;padding:16px 20px}
+header h1{margin:0;font-size:20px}
+header p{margin:4px 0 0;font-size:13px;opacity:.9}
+main{max-width:960px;margin:0 auto;padding:16px}
+section{background:#fff;border:1px solid var(--green-line);border-radius:10px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 12px;font-size:16px;color:var(--green-dark)}
+.who{display:flex;flex-wrap:wrap;gap:8px}
+.who button{border:1px solid var(--green-line);background:#fff;border-radius:20px;padding:8px 16px;font-size:15px;cursor:pointer;color:var(--text)}
+.who button.on{background:var(--green);color:#fff;border-color:var(--green)}
+.notice{background:#fff7e0;border:1px solid #f0d98a;color:#7a5b00;border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-top:1px solid #edf3ed}
+.row:first-of-type{border-top:0}
+.day{font-size:15px;min-width:90px}
+.day small{color:var(--muted)}
+.opts{display:flex;gap:6px}
+.opts button{border:1px solid var(--green-line);background:#fff;border-radius:8px;padding:8px 14px;font-size:14px;cursor:pointer;color:var(--text)}
+.opts button.on.eat{background:var(--eat);color:#fff;border-color:var(--eat)}
+.opts button.on.undecided{background:var(--undecided);color:#fff;border-color:var(--undecided)}
+.opts button.on.skip{background:var(--skip);color:#fff;border-color:var(--skip)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th,td{border:1px solid #e3ede4;padding:7px 6px;text-align:center}
+th{background:var(--green-light);color:var(--green-dark);font-weight:600}
+th.today{background:var(--green);color:#fff}
+td.name{font-weight:600;background:#fafdfa}
+td.me{background:var(--green-light)}
+.s-eat{color:var(--eat);font-weight:600}
+.s-undecided{color:var(--undecided);font-weight:600}
+.s-skip{color:var(--skip)}
+.pen{font-weight:700}
+.pen.zero{color:var(--muted);font-weight:400}
+.pen.has{color:#c0392b}
+tr.sum td{background:var(--green-light);font-weight:600}
+.wk{color:#b04a4a}
+.foot{font-size:12px;color:var(--muted);line-height:1.6}
+[hidden]{display:none!important}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+#modal .box{background:#fff;border-radius:12px;padding:20px;max-width:420px;width:100%}
+#modal p{margin:0 0 10px;font-size:14px;line-height:1.5}
+#modal .alert{color:#b3261e;font-weight:700}
+#modal textarea{width:100%;height:80px;border:1px solid var(--green-line);border-radius:8px;padding:8px;font-size:14px;font-family:inherit}
+#modal .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+#modal .btns button{border:1px solid var(--green-line);background:#fff;border-radius:8px;padding:8px 16px;font-size:14px;cursor:pointer}
+#modal .btns #mok{background:var(--green);color:#fff;border-color:var(--green)}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#b3261e;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:600;max-width:90%;z-index:11}
+td.rsn{text-align:left}
+</style>
+</head>
+<body>
+<header>
+  <h1>🌿 봄찬 점심 체크</h1>
+  <p>오늘부터 5일 후까지 · 당일 <span id="cutoff">08:00</span>까지 미정이면 패널티 +1</p>
+</header>
+<main>
+  <section>
+    <h2>나는 누구?</h2>
+    <div class="who" id="who"></div>
+  </section>
+
+  <section id="mine" hidden>
+    <h2><span id="mename"></span> 님의 점심 체크</h2>
+    <div id="warn"></div>
+    <div id="mylist"></div>
+  </section>
+
+  <section>
+    <h2>전체 현황</h2>
+    <div class="scroll"><table id="grid"></table></div>
+  </section>
+
+  <section>
+    <h2>월별 식수 (월말 결제용)</h2>
+    <div class="scroll"><table id="monthly"></table></div>
+    <p class="foot">'먹음'으로 체크된 수 기준입니다. 진행 중인 달은 오늘 이후 예정분이 포함되어 있어 바뀔 수 있습니다. 시스템 가동 이전 데이터는 없습니다.</p>
+  </section>
+
+  <section>
+    <h2>08:00 이후 변경 내역</h2>
+    <div class="scroll"><table id="chg"></table></div>
+  </section>
+
+  <p class="foot">
+    · 체크하지 않은 날은 <b>미정</b>입니다. 당일 08:00 시점에 미정이면 패널티가 1회 쌓입니다. 08:00 이후에 바꿔도 패널티는 유지됩니다.<br>
+    · 토·일은 패널티 대상이 아닙니다. 공휴일은 자동 제외되지 않습니다.
+  </p>
+</main>
+
+<div id="modal" hidden>
+  <div class="box">
+    <p class="alert">당일 08:00이 지났습니다.</p>
+    <p>변경 사유를 입력하세요. 변경 후 <b>담당자께 반드시 구두로 공유</b>해야 합니다.</p>
+    <textarea id="reason" maxlength="200" placeholder="사유 (필수)"></textarea>
+    <div class="btns"><button id="mcancel">취소</button><button id="mok">변경</button></div>
+  </div>
+</div>
+<div id="toast" hidden></div>
+
+<script>
+const ST = [["먹음","eat"],["미정","undecided"],["안먹음","skip"]];
+const CLS = {"먹음":"eat","미정":"undecided","안먹음":"skip"};
+const WD = ["일","월","화","수","목","금","토"];
+let S = null;
+let me = null;
+try { me = localStorage.getItem("meal_me"); } catch(e) {}
+
+function fmt(d){
+  const dt = new Date(d + "T00:00:00");
+  return {md:(dt.getMonth()+1)+"/"+dt.getDate(), wd:WD[dt.getDay()], weekend:dt.getDay()===0||dt.getDay()===6};
+}
+
+let M = null, C = [];
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function renderChanges(){
+  const t = document.getElementById("chg");
+  if (!C.length){ t.innerHTML = "<tr><td>변경 내역 없음</td></tr>"; return; }
+  let h = "<tr><th>일시</th><th>팀원</th><th>대상일</th><th>변경</th><th>사유</th></tr>";
+  C.forEach(x=>{
+    h += `<tr><td>${esc(x.changed_at.slice(5,16).replace("T"," "))}</td><td>${esc(x.member)}</td><td>${esc(x.date.slice(5))}</td><td>${esc(x.old_status)} → ${esc(x.new_status)}</td><td class="rsn">${esc(x.reason)}</td></tr>`;
+  });
+  t.innerHTML = h;
+}
+async function load(){
+  try{
+    const [r, r2, r3] = await Promise.all([fetch("/api/state"), fetch("/api/monthly"), fetch("/api/changes")]);
+    S = await r.json();
+    M = await r2.json();
+    C = await r3.json();
+    if (me && !S.members.includes(me)) me = null;
+    render();
+  }catch(e){}
+}
+
+function renderMonthly(){
+  const t = document.getElementById("monthly");
+  let h = "<tr><th>월</th><th>총 식수</th><th>전월 대비</th>";
+  M.members.forEach(m=>{ h += `<th>${m}</th>`; });
+  h += "</tr>";
+  M.months.slice().reverse().forEach(x=>{
+    const cur = x.month===M.current;
+    let chg = "-";
+    if (x.diff!==null){
+      const sign = x.diff>0?"+":"";
+      chg = `${sign}${x.diff}` + (x.pct!==null ? ` (${sign}${x.pct}%)` : "");
+    }
+    h += `<tr><td class="name">${x.month}${cur?" (진행 중)":""}</td>`;
+    h += `<td class="pen">${x.total}${cur&&x.upcoming?`<br><small class="foot">예정 ${x.upcoming} 포함</small>`:""}</td>`;
+    h += `<td>${chg}</td>`;
+    M.members.forEach(m=>{ h += `<td>${x.by_member[m]}</td>`; });
+    h += "</tr>";
+  });
+  t.innerHTML = h;
+}
+
+function render(){
+  document.getElementById("cutoff").textContent = S.cutoff;
+
+  // 이름 선택
+  const who = document.getElementById("who");
+  who.innerHTML = "";
+  S.members.forEach(m=>{
+    const b = document.createElement("button");
+    b.textContent = m;
+    if (m===me) b.className = "on";
+    b.onclick = ()=>{ me = m; try{localStorage.setItem("meal_me", m);}catch(e){} render(); };
+    who.appendChild(b);
+  });
+
+  // 내 체크
+  const mine = document.getElementById("mine");
+  mine.hidden = !me;
+  if (me){
+    document.getElementById("mename").textContent = me;
+    const warn = document.getElementById("warn");
+    const nowHour = parseInt(S.now.slice(11,13),10);
+    const todayUndecided = S.statuses[me][S.today]==="미정";
+    const wk = fmt(S.today).weekend;
+    warn.innerHTML = (todayUndecided && !wk && nowHour < 8)
+      ? `<div class="notice">오늘 점심이 아직 미정입니다. ${S.cutoff}까지 체크하세요.</div>` : "";
+    const list = document.getElementById("mylist");
+    list.innerHTML = "";
+    S.dates.forEach(d=>{
+      const f = fmt(d);
+      const row = document.createElement("div");
+      row.className = "row";
+      const day = document.createElement("div");
+      day.className = "day";
+      day.innerHTML = `${f.md} <small class="${f.weekend?'wk':''}">(${f.wd})${d===S.today?' · 오늘':''}</small>`;
+      const opts = document.createElement("div");
+      opts.className = "opts";
+      ST.forEach(([label,cls])=>{
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.className = cls + (S.statuses[me][d]===label ? " on" : "");
+        b.onclick = ()=>setStatus(d,label);
+        opts.appendChild(b);
+      });
+      row.appendChild(day); row.appendChild(opts);
+      list.appendChild(row);
+    });
+  }
+
+  // 전체 현황
+  const g = document.getElementById("grid");
+  let h = "<tr><th>팀원</th>";
+  S.dates.forEach(d=>{
+    const f = fmt(d);
+    h += `<th class="${d===S.today?'today':''}">${f.md}<br>(${f.wd})</th>`;
+  });
+  h += "<th>패널티<br>누적</th></tr>";
+  S.members.forEach(m=>{
+    h += `<tr><td class="name ${m===me?'me':''}">${m}</td>`;
+    S.dates.forEach(d=>{
+      const s = S.statuses[m][d];
+      h += `<td class="s-${CLS[s]}">${s}</td>`;
+    });
+    const p = S.penalties[m];
+    h += `<td class="pen ${p>0?'has':'zero'}">${p}</td></tr>`;
+  });
+  h += "<tr class='sum'><td>먹음</td>";
+  S.dates.forEach(d=>{
+    h += `<td>${S.members.filter(m=>S.statuses[m][d]==="먹음").length}</td>`;
+  });
+  h += "<td></td></tr><tr class='sum'><td>미정</td>";
+  S.dates.forEach(d=>{
+    h += `<td>${S.members.filter(m=>S.statuses[m][d]==="미정").length}</td>`;
+  });
+  h += "<td></td></tr>";
+  g.innerHTML = h;
+  renderMonthly();
+  renderChanges();
+}
+
+function ask(){
+  return new Promise(res=>{
+    const bg = document.getElementById("modal");
+    const ta = document.getElementById("reason");
+    ta.value = "";
+    bg.hidden = false;
+    ta.focus();
+    const done = v=>{ bg.hidden = true; res(v); };
+    document.getElementById("mok").onclick = ()=>{
+      const v = ta.value.trim();
+      if(!v){ ta.focus(); return; }
+      done(v);
+    };
+    document.getElementById("mcancel").onclick = ()=>done(null);
+  });
+}
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t);
+  toast.t = setTimeout(()=>{ t.hidden = true; }, 12000);
+}
+
+async function setStatus(date,status){
+  if (S.statuses[me][date]===status) return;
+  let reason = "";
+  const late = date===S.today && parseInt(S.now.slice(11,13),10) >= 8;
+  if (late){
+    reason = await ask();
+    if (reason===null) return;
+  }
+  const r = await fetch("/api/meal",{
+    method:"PUT",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({member:me,date:date,status:status,reason:reason})
+  });
+  if(!r.ok){ alert("저장 실패"); }
+  else if (late){ toast("⚠ 08:00 이후 변경입니다. 담당자께 반드시 구두로 공유하세요."); }
+  await load();
+}
+
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
