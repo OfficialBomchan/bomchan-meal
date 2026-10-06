@@ -52,7 +52,7 @@ textarea{width:100%;padding:10px;border:1px solid var(--l);border-radius:10px;fo
 
 <script>
 const $=id=>document.getElementById(id);const ST=["먹음","미정","안먹음"];
-const NAMES=["JH","PH","SH","BK","DJ","MW","TS","HS","HM","JS"];
+const NAMES=["JH","PH","SH","BK","DJ","MW","TS","HS","HM","JS","헬퍼1","헬퍼2","헬퍼3"];
 let draft={},savedMap={};
 let S=null,me=null,Y,M,tab=0,D=null;
 async function api(u,o){const r=await fetch(u,o);if(!r.ok){const e=new Error(r.status);e.s=r.status;throw e}return r.json()}

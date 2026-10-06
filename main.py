@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from kr_holidays import HOLIDAYS
 
-MEMBERS = ["JH","PH","SH","BK","DJ","MW","TS","HS","HM","JS"]
+MEMBERS = ["JH","PH","SH","BK","DJ","MW","TS","HS","HM","JS","헬퍼1","헬퍼2","헬퍼3"]
 STATUSES = ("먹음","미정","안먹음")
 CUTOFF = 8
 AHEAD = 5
