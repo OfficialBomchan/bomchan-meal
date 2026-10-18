@@ -22,7 +22,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
 .sheet{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center;z-index:9}
 .sheet>div{background:#fff;width:100%;max-width:480px;padding:20px 16px 28px;border-radius:18px 18px 0 0}.sheet .btn{margin-top:8px}
 textarea{width:100%;padding:10px;border:1px solid var(--l);border-radius:10px;font:inherit;margin:8px 0}
-.c.chg{outline:3px solid var(--gd)}.row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--l);font-size:14px}
+.c.ed.past{border:2px dashed #8d9a8f}.c.ed.past small{color:var(--m)}.c.chg{outline:3px solid var(--gd)}.row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--l);font-size:14px}
 .back{display:block;background:none;border:0;color:var(--gd);font-size:16px;font-weight:700;padding:6px 0 10px;cursor:pointer}
 .warn{background:#fdecea;color:var(--r);padding:10px;border-radius:10px;font-weight:700;margin:8px 0}
 .toast{position:fixed;left:16px;right:16px;bottom:20px;max-width:448px;margin:auto;background:var(--gd);color:#fff;padding:12px;border-radius:12px;z-index:20;font-weight:700}.toast.r{background:var(--r)}
@@ -41,7 +41,7 @@ textarea{width:100%;padding:10px;border:1px solid var(--l);border-radius:10px;fo
 <div class="tabs" id="tabs"></div>
 <div id="t0"><div class="nav"><button id="pv" onclick="mv(-1)">◀</button><b id="ym" style="font-size:18px"></b><button id="nx" onclick="mv(1)">▶</button></div>
 <div class="grid" id="dow"></div><div class="grid" id="cal" style="margin-top:6px"></div>
-<p class="sub" style="font-size:13px">점선 날짜를 누르면 미정 → 먹음 → 안먹음 순서로 바뀝니다. 다 고른 뒤 아래 <b>저장하기</b>를 눌러야 반영됩니다.</p><p id="dn" class="sub" style="font-size:13px;margin:0"></p><button class="btn" id="sv" onclick="save()" style="margin-top:10px">저장하기</button></div>
+<p class="sub" style="font-size:13px">지난 날짜도 눌러서 고칠 수 있습니다(사유 입력 필요). 점선 날짜를 누르면 미정 → 먹음 → 안먹음 순서로 바뀝니다. 다 고른 뒤 아래 <b>저장하기</b>를 눌러야 반영됩니다.</p><p id="dn" class="sub" style="font-size:13px;margin:0"></p><button class="btn" id="sv" onclick="save()" style="margin-top:10px">저장하기</button></div>
 <div id="t1" class="hide card"></div><div id="t2" class="hide"></div><div id="t3" class="hide card"></div>
 </div></div>
 
@@ -77,11 +77,11 @@ function draw(){const ym=Y+"-"+p2(M);
  for(let d=1;d<=n;d++){const w=new Date(Y,M-1,d).getDay();if(w==0||w==6)continue;
   const ds=ym+"-"+p2(d);if(first){h+='<div></div>'.repeat(w-1);first=false}
   if(D.off.includes(ds)){h+='<div class="c off"></div>';continue}
-  const ed=S.open.includes(ds);if(ed)savedMap[ds]=D.status[ds]||"미정";
+  const past=ds<S.today&&ds>=S.start;const ed=S.open.includes(ds)||past;if(ed)savedMap[ds]=D.status[ds]||"미정";
   const s=ed?(draft[ds]??savedMap[ds]):D.status[ds];let c="c",sub="";
   if(s=="먹음"){c+=" eat";sub="먹음"}else if(s=="안먹음"){c+=" skip";sub="안먹음"}
-  else if(ed){c+=" und";sub="미정"}else if(D.penalty.includes(ds)){c+=" pen";sub="패널티"}
-  if(ed)c+=" ed";if(ed&&ds in draft)c+=" chg";
+  else if(ed&&!past){c+=" und";sub="미정"}else if(D.penalty.includes(ds)){c+=" pen";sub="패널티"}else if(past){sub="수정"}
+  if(ed)c+=" ed";if(past)c+=" past";if(ed&&ds in draft)c+=" chg";
   h+=`<div class="${c}" ${ed?`onclick="cyc('${ds}')"`:""}>${d}<small>${sub}</small></div>`}
  $("cal").innerHTML=h;upd()}
 function mv(k){M+=k;if(M>12){M=1;Y++}if(M<1){M=12;Y--}cal()}
@@ -89,12 +89,13 @@ function cl(){$("sh").classList.add("hide")}
 function cyc(ds){const cur=draft[ds]??savedMap[ds]??"미정";const CY=["미정","먹음","안먹음"];const nx=CY[(CY.indexOf(cur)+1)%3];if(nx===(savedMap[ds]??"미정"))delete draft[ds];else draft[ds]=nx;draw()}
 function upd(){const n=Object.keys(draft).length;$("sv").disabled=!n;$("sv").style.opacity=n?1:.4;$("sv").textContent=n?`저장하기 (${n}건)`:"저장하기";$("dn").textContent=n?"아직 저장되지 않았습니다.":""}
 async function save(){const ks=Object.keys(draft);if(!ks.length)return;let reason="";
- if(ks.includes(S.today)&&S.hour>=8){reason=await ask();if(reason===null)return}
- let late=false;try{for(const ds of ks){const r=await api("/api/meal",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({member:me,date:ds,status:draft[ds],reason:ds===S.today?reason:""})});if(r.late)late=true}
+ const hasPast=ks.some(k=>k<S.today);
+ if(hasPast||(ks.includes(S.today)&&S.hour>=8)){reason=await ask(hasPast);if(reason===null)return}
+ let late=false;try{for(const ds of ks){const r=await api("/api/meal",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({member:me,date:ds,status:draft[ds],reason:(ds<S.today||ds===S.today)?reason:""})});if(r.late)late=true}
   draft={};savedMap={};load();done(late)}
  catch(e){toast("저장 실패: 일부만 저장됐을 수 있습니다",1);draft={};savedMap={};load()}}
-function done(late){$("shb").innerHTML=`<div style="text-align:center;padding:8px 0 4px"><div style="font-size:40px;color:var(--g)">✓</div><b style="font-size:20px">선택이 완료되었습니다</b>${late?'<div class="warn" style="margin-top:12px">08:00 이후 변경입니다.<br>담당자께 반드시 구두로 공유하세요.</div>':""}</div><button class="btn" onclick="cl()">확인</button>`;$("sh").classList.remove("hide")}
-function ask(){return new Promise(res=>{$("shb").innerHTML=`<div class="warn">08:00이 지났습니다. 변경 사유를 입력하세요.<br>담당자께 반드시 구두로 공유해야 합니다.</div><textarea id="rs" rows="3" placeholder="사유"></textarea><button class="btn" id="ok">확인</button><button class="btn o" id="no">취소</button>`;
+function done(late){$("shb").innerHTML=`<div style="text-align:center;padding:8px 0 4px"><div style="font-size:40px;color:var(--g)">✓</div><b style="font-size:20px">선택이 완료되었습니다</b>${late?'<div class="warn" style="margin-top:12px">지난 날짜 또는 08:00 이후 변경입니다.<br>담당자께 반드시 구두로 공유하세요.</div>':""}</div><button class="btn" onclick="cl()">확인</button>`;$("sh").classList.remove("hide")}
+function ask(past){return new Promise(res=>{$("shb").innerHTML=`<div class="warn">${past?"⚠ 지난 날짜를 수정합니다.":"08:00이 지났습니다."} 변경 사유를 입력하세요.<br>담당자께 반드시 구두로 공유해야 합니다.</div><textarea id="rs" rows="3" placeholder="사유"></textarea><button class="btn" id="ok">확인</button><button class="btn o" id="no">취소</button>`;
  $("sh").classList.remove("hide");$("no").onclick=()=>{cl();res(null)};$("ok").onclick=()=>{const v=$("rs").value.trim();if(!v){$("rs").focus();return}cl();res(v)}})}
 async function all(){const a=await api("/api/all");const ic={"먹음":"●","안먹음":"×"};
  $("t1").innerHTML="<table><tr><th></th>"+a.days.map(d=>`<th>${+d.slice(5,7)}/${+d.slice(8)}</th>`).join("")+"<th>패널티</th></tr>"+

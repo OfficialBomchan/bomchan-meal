@@ -145,8 +145,16 @@ class Put(BaseModel):
 def put(p: Put):
     if p.member not in MEMBERS or p.status not in STATUSES: raise HTTPException(400, "잘못된 값")
     snapshot(); now = now_kst()
-    if p.date not in [x.isoformat() for x in open_dates(now.date())]: raise HTTPException(400, "변경할 수 없는 날짜")
-    late = p.date == now.date().isoformat() and now.hour >= CUTOFF
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", p.date): raise HTTPException(400, "잘못된 날짜")
+    with conn() as c0:
+        start = c0.q("SELECT v FROM meta WHERE k='start'").fetchone()["v"]
+    today = now.date().isoformat()
+    try: dd = datetime.strptime(p.date, "%Y-%m-%d").date()
+    except ValueError: raise HTTPException(400, "잘못된 날짜")
+    past = start <= p.date < today and workday(dd)
+    if p.date not in [x.isoformat() for x in open_dates(now.date())] and not past:
+        raise HTTPException(400, "변경할 수 없는 날짜")
+    late = past or (p.date == today and now.hour >= CUTOFF)
     if late and not p.reason.strip(): raise HTTPException(422, "사유 필요")
     with conn() as c:
         r = c.q("SELECT status FROM meals WHERE member=? AND d=?", (p.member, p.date)).fetchone()
