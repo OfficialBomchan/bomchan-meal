@@ -31,7 +31,7 @@ textarea{width:100%;padding:10px;border:1px solid var(--l);border-radius:10px;fo
 <div id="v1"><h1>봄찬 점심 체크</h1><p class="sub">봄찬 점심밥 인원을 위한 앱입니다.</p>
 <div class="card"><b>이렇게 사용합니다</b><p>① 내 이름을 고릅니다.<br>② 달력에서 날짜를 눌러 먹음 / 안먹음을 선택합니다.<br>③ 오늘부터 근무일 5일 뒤까지 미리 선택할 수 있습니다.</p>
 <p><b>당일 08:00까지 미정이면 패널티 +1</b>, 08:00 이후 변경은 사유 입력과 담당자께 구두 공유가 필요합니다.</p></div>
-<button class="btn" onclick="go(2)">다음</button><button class="btn o" style="margin-top:10px" onclick="openCost()">식대 관리</button></div>
+<button class="btn" onclick="go(2)">다음</button><button class="btn o" style="margin-top:10px" onclick="openCost()">식대 관리</button><button class="btn o" style="margin-top:10px" onclick="openMembers()">구성원 관리</button></div>
 
 <div id="v2" class="hide"><button class="back" onclick="go(1)">← 뒤로</button><h1>누구세요?</h1><p class="sub">본인 이름을 선택하세요.</p><div class="names" id="names"></div></div>
 
@@ -41,35 +41,39 @@ textarea{width:100%;padding:10px;border:1px solid var(--l);border-radius:10px;fo
 <div class="tabs" id="tabs"></div>
 <div id="t0"><div class="nav"><button id="pv" onclick="mv(-1)">◀</button><b id="ym" style="font-size:18px"></b><button id="nx" onclick="mv(1)">▶</button></div>
 <div class="grid" id="dow"></div><div class="grid" id="cal" style="margin-top:6px"></div>
-<p class="sub" style="font-size:13px">지난 날짜도 눌러서 고칠 수 있습니다(사유 입력 필요). 점선 날짜를 누르면 미정 → 먹음 → 안먹음 순서로 바뀝니다. 다 고른 뒤 아래 <b>저장하기</b>를 눌러야 반영됩니다.</p><p id="dn" class="sub" style="font-size:13px;margin:0"></p><button class="btn" id="sv" onclick="save()" style="margin-top:10px">저장하기</button></div>
+<p class="sub" style="font-size:13px">지난 날짜도 눌러서 고칠 수 있습니다(사유 입력 필요). 점선 날짜를 누르면 먹음 / 안먹음을 바로 고를 수 있습니다. 다 고른 뒤 아래 <b>저장하기</b>를 눌러야 반영됩니다.</p><p id="dn" class="sub" style="font-size:13px;margin:0"></p><button class="btn" id="sv" onclick="save()" style="margin-top:10px">저장하기</button></div>
 <div id="t1" class="hide card"></div><div id="t2" class="hide"></div><div id="t3" class="hide card"></div>
 </div></div>
 
 <div id="v4" class="hide"><button class="back" onclick="go(1)">← 뒤로</button><div class="top"><b style="font-size:22px">식대 관리</b></div>
 <div class="card"><b>1식 단가(원)</b><div style="display:flex;gap:8px;margin-top:8px"><input id="pr" type="number" inputmode="numeric" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit"><button class="btn" style="width:90px" onclick="savePrice()">저장</button></div><p class="sub" style="font-size:13px;margin:8px 0 0">결제 금액 = 월 식수(먹음) × 단가</p></div><div id="cost"></div></div>
+<div id="v5" class="hide"><button class="back" onclick="go(1)">← 뒤로</button><div class="top"><b style="font-size:22px">구성원 관리</b></div>
+<div class="card"><b>새 구성원 추가</b><div style="display:flex;gap:8px;margin-top:8px"><input id="nn" placeholder="이름" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit"><button class="btn" style="width:90px" onclick="addMember()">추가</button></div></div>
+<div class="card"><b>현재 인원</b><div id="mAct" style="margin-top:8px"></div></div>
+<div class="card"><b>퇴사자 (기록은 보존됩니다)</b><div id="mInact" style="margin-top:8px"></div></div>
+</div>
 <div id="sh" class="sheet hide" onclick="if(event.target===this)cl()"><div id="shb"></div></div>
 <div id="ts" class="toast hide"></div>
 
 <script>
 const $=id=>document.getElementById(id);const ST=["먹음","미정","안먹음"];
-const NAMES=["JH","PH","SH","BK","DJ","MW","TS","HS","HM","JS","헬퍼1","헬퍼2","헬퍼3"];
 let draft={},savedMap={};
 let S=null,me=null,Y,M,tab=0,D=null;
 async function api(u,o){const r=await fetch(u,o);if(!r.ok){const e=new Error(r.status);e.s=r.status;throw e}return r.json()}
-function go(n){["v1","v2","v3","v4"].forEach((v,i)=>$(v).classList.toggle("hide",i+1!==n));if(n==3)load()}
+function go(n){["v1","v2","v3","v4","v5"].forEach((v,i)=>$(v).classList.toggle("hide",i+1!==n));if(n==3)load()}
 function toast(t,r){const e=$("ts");e.textContent=t;e.className="toast"+(r?" r":"");setTimeout(()=>e.classList.add("hide"),r?6000:1800)}
 async function init(){
- $("names").innerHTML=NAMES.map(m=>`<button onclick="pick('${m}')">${m}</button>`).join("");
  $("dow").innerHTML=["월","화","수","목","금"].map(x=>`<div class="dow">${x}</div>`).join("");
  $("tabs").innerHTML=["내 달력","전체 현황","월별 식수","변경 내역"].map((x,i)=>`<button onclick="tb(${i})" id="tb${i}">${x}</button>`).join("");
- try{S=await api("/api/state");const t=S.today.split("-");Y=+t[0];M=+t[1]}catch(e){}}
-async function pick(m){me=m;draft={};savedMap={};try{localStorage.setItem("me",m)}catch(e){}if(!S){try{S=await api("/api/state")}catch(e){toast("서버에 연결할 수 없습니다",1);return}}const t=S.today.split("-");Y=+t[0];M=+t[1];tab=0;go(3)}
+ try{S=await api("api/state");const t=S.today.split("-");Y=+t[0];M=+t[1]}catch(e){}
+ $("names").innerHTML=(S?S.members:[]).map(m=>`<button onclick="pick('${m}')">${m}</button>`).join("")}
+async function pick(m){me=m;draft={};savedMap={};try{localStorage.setItem("me",m)}catch(e){}if(!S){try{S=await api("api/state")}catch(e){toast("서버에 연결할 수 없습니다",1);return}}const t=S.today.split("-");Y=+t[0];M=+t[1];tab=0;go(3)}
 function tb(i){tab=i;load()}
-async function load(){S=await api("/api/state");$("me").textContent=me;$("pen").textContent="패널티 "+S.penalties[me]+"회";
+async function load(){S=await api("api/state");$("me").textContent=me;$("pen").textContent="패널티 "+S.penalties[me]+"회";
  for(let i=0;i<4;i++){$("t"+i).classList.toggle("hide",i!==tab);$("tb"+i).classList.toggle("on",i===tab)}
  if(tab==0)await cal();if(tab==1)await all();if(tab==2)await mon();if(tab==3)await lg()}
 const p2=n=>String(n).padStart(2,"0");
-async function cal(){const ym=Y+"-"+p2(M);D=await api("/api/month?ym="+ym+"&member="+me);draw()}
+async function cal(){const ym=Y+"-"+p2(M);D=await api("api/month?ym="+ym+"&member="+me);draw()}
 function draw(){const ym=Y+"-"+p2(M);
  $("ym").textContent=Y+"년 "+M+"월";const st=S.start.slice(0,7),last=S.open[S.open.length-1].slice(0,7);
  $("pv").disabled=ym<=st;$("nx").disabled=ym>="2027-12";
@@ -82,40 +86,65 @@ function draw(){const ym=Y+"-"+p2(M);
   if(s=="먹음"){c+=" eat";sub="먹음"}else if(s=="안먹음"){c+=" skip";sub="안먹음"}
   else if(ed&&!past){c+=" und";sub="미정"}else if(D.penalty.includes(ds)){c+=" pen";sub="패널티"}else if(past){sub="수정"}
   if(ed)c+=" ed";if(past)c+=" past";if(ed&&ds in draft)c+=" chg";
-  h+=`<div class="${c}" ${ed?`onclick="cyc('${ds}')"`:""}>${d}<small>${sub}</small></div>`}
+  h+=`<div class="${c}" ${ed?`onclick="openPick('${ds}')"`:""}>${d}<small>${sub}</small></div>`}
  $("cal").innerHTML=h;upd()}
 function mv(k){M+=k;if(M>12){M=1;Y++}if(M<1){M=12;Y--}cal()}
 function cl(){$("sh").classList.add("hide")}
-function cyc(ds){const cur=draft[ds]??savedMap[ds]??"미정";const CY=["미정","먹음","안먹음"];const nx=CY[(CY.indexOf(cur)+1)%3];if(nx===(savedMap[ds]??"미정"))delete draft[ds];else draft[ds]=nx;draw()}
+function openPick(ds){const md=+ds.slice(5,7),dd=+ds.slice(8);
+ $("shb").innerHTML=`<div style="text-align:center;font-weight:700;margin-bottom:12px;font-size:17px">${md}월 ${dd}일</div><button class="btn" id="pkEat">먹음</button><button class="btn o" id="pkSkip" style="margin-top:8px">안먹음</button><button class="btn o" id="pkNo" style="margin-top:8px">취소</button>`;
+ $("sh").classList.remove("hide");
+ $("pkEat").onclick=()=>setStatus(ds,"먹음");$("pkSkip").onclick=()=>setStatus(ds,"안먹음");$("pkNo").onclick=cl}
+function setStatus(ds,st){if(st===(savedMap[ds]??"미정"))delete draft[ds];else draft[ds]=st;cl();draw()}
 function upd(){const n=Object.keys(draft).length;$("sv").disabled=!n;$("sv").style.opacity=n?1:.4;$("sv").textContent=n?`저장하기 (${n}건)`:"저장하기";$("dn").textContent=n?"아직 저장되지 않았습니다.":""}
 async function save(){const ks=Object.keys(draft);if(!ks.length)return;let reason="";
  const hasPast=ks.some(k=>k<S.today);
  if(hasPast||(ks.includes(S.today)&&S.hour>=8)){reason=await ask(hasPast);if(reason===null)return}
- let late=false;try{for(const ds of ks){const r=await api("/api/meal",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({member:me,date:ds,status:draft[ds],reason:(ds<S.today||ds===S.today)?reason:""})});if(r.late)late=true}
+ let late=false;try{for(const ds of ks){const r=await api("api/meal",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({member:me,date:ds,status:draft[ds],reason:(ds<S.today||ds===S.today)?reason:""})});if(r.late)late=true}
   draft={};savedMap={};load();done(late)}
  catch(e){toast("저장 실패: 일부만 저장됐을 수 있습니다",1);draft={};savedMap={};load()}}
 function done(late){$("shb").innerHTML=`<div style="text-align:center;padding:8px 0 4px"><div style="font-size:40px;color:var(--g)">✓</div><b style="font-size:20px">선택이 완료되었습니다</b>${late?'<div class="warn" style="margin-top:12px">지난 날짜 또는 08:00 이후 변경입니다.<br>담당자께 반드시 구두로 공유하세요.</div>':""}</div><button class="btn" onclick="cl()">확인</button>`;$("sh").classList.remove("hide")}
 function ask(past){return new Promise(res=>{$("shb").innerHTML=`<div class="warn">${past?"⚠ 지난 날짜를 수정합니다.":"08:00이 지났습니다."} 변경 사유를 입력하세요.<br>담당자께 반드시 구두로 공유해야 합니다.</div><textarea id="rs" rows="3" placeholder="사유"></textarea><button class="btn" id="ok">확인</button><button class="btn o" id="no">취소</button>`;
  $("sh").classList.remove("hide");$("no").onclick=()=>{cl();res(null)};$("ok").onclick=()=>{const v=$("rs").value.trim();if(!v){$("rs").focus();return}cl();res(v)}})}
-async function all(){const a=await api("/api/all");const ic={"먹음":"●","안먹음":"×"};
+async function all(){const a=await api("api/all");const ic={"먹음":"●","안먹음":"×"};const NM=S.members;
  $("t1").innerHTML="<table><tr><th></th>"+a.days.map(d=>`<th>${+d.slice(5,7)}/${+d.slice(8)}</th>`).join("")+"<th>패널티</th></tr>"+
- NAMES.map(m=>`<tr><td><b>${m}</b></td>`+a.days.map(d=>`<td>${ic[a.table[m][d]]||"·"}</td>`).join("")+`<td>${S.penalties[m]}</td></tr>`).join("")+
- "<tr><td><b>먹음</b></td>"+a.days.map(d=>`<td><b>${NAMES.filter(m=>a.table[m][d]=="먹음").length}</b></td>`).join("")+"<td></td></tr></table><p class='sub' style='font-size:12px'>● 먹음 × 안먹음 · 미정</p>"}
-async function mon(){const a=await api("/api/monthly");
+ NM.map(m=>`<tr><td><b>${m}</b></td>`+a.days.map(d=>`<td>${ic[a.table[m][d]]||"·"}</td>`).join("")+`<td>${S.penalties[m]}</td></tr>`).join("")+
+ "<tr><td><b>먹음</b></td>"+a.days.map(d=>`<td><b>${NM.filter(m=>a.table[m][d]=="먹음").length}</b></td>`).join("")+"<td></td></tr></table><p class='sub' style='font-size:12px'>● 먹음 × 안먹음 · 미정</p>"}
+async function mon(){const a=await api("api/monthly");
  $("t2").innerHTML=a.months.length?a.months.map(m=>`<div class="card"><b>${m.ym}</b> ${m.ym==a.now?"(진행 중)":""}<div style="font-size:26px;font-weight:800;color:var(--gd)">${m.total}식 ${m.diff==null?"":`<span style="font-size:14px;color:var(--m)">전월 대비 ${m.diff>0?"+":""}${m.diff}</span>`}</div><div class="sub" style="font-size:13px">${Object.entries(m.by).map(([k,v])=>k+" "+v).join(" · ")}</div></div>`).join(""):'<div class="card sub">아직 기록이 없습니다.</div>'}
-async function lg(){const a=await api("/api/logs");$("t3").innerHTML=a.length?a.map(x=>`<div style="padding:6px 0;border-bottom:1px solid var(--l)"><b>${x.member}</b> ${x.d.slice(5)} ${x.old}→${x.new}<div class="sub" style="font-size:13px">${x.at} · ${x.reason}</div></div>`).join(""):'<span class="sub">08:00 이후 변경 기록이 없습니다.</span>'}
-async function openCost(){go(4);if(!S)try{S=await api("/api/state")}catch(e){}
- const p=await api("/api/price");$("pr").value=p.price||"";renderCost(p.price||0)}
-async function savePrice(){const v=parseInt($("pr").value||"0");await api("/api/price",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({price:v})});toast("단가 저장됨");renderCost(v)}
+async function lg(){const a=await api("api/logs");$("t3").innerHTML=a.length?a.map(x=>`<div style="padding:6px 0;border-bottom:1px solid var(--l)"><b>${x.member}</b> ${x.d.slice(5)} ${x.old}→${x.new}<div class="sub" style="font-size:13px">${x.at} · ${x.reason}</div></div>`).join(""):'<span class="sub">08:00 이후 변경 기록이 없습니다.</span>'}
+async function openCost(){go(4);if(!S)try{S=await api("api/state")}catch(e){}
+ const p=await api("api/price");$("pr").value=p.price||"";renderCost(p.price||0)}
+async function savePrice(){const v=parseInt($("pr").value||"0");await api("api/price",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({price:v})});toast("단가 저장됨");renderCost(v)}
 let CY_=2026,CM_=10,CP=0,CA=null;
 function monOpts(y){const f=y==2026?10:1;let h="";for(let m=f;m<=12;m++)h+=`<option value="${m}"${m==CM_?" selected":""}>${m}월</option>`;return h}
-async function renderCost(price){CP=price;CA=await api("/api/monthly");
+async function renderCost(price){CP=price;CA=await api("api/monthly");
  const now=CA.now.split("-").map(Number);if(now[0]*100+now[1]>=202610&&now[0]*100+now[1]<=202712){CY_=now[0];CM_=now[1]}
  $("cost").innerHTML=`<div class="card"><div style="display:flex;gap:8px;margin-bottom:12px"><select id="cy" onchange="cyChg()" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit;background:#fff"><option value="2026"${CY_==2026?" selected":""}>2026년</option><option value="2027"${CY_==2027?" selected":""}>2027년</option></select><select id="cm" onchange="cmChg()" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit;background:#fff">${monOpts(CY_)}</select></div><div id="cr"></div></div>`;showCost()}
 function cyChg(){CY_=+$("cy").value;CM_=CY_==2026?Math.max(CM_,10):CM_;$("cm").innerHTML=monOpts(CY_);showCost()}
 function cmChg(){CM_=+$("cm").value;showCost()}
-function showCost(){const ym=CY_+"-"+p2(CM_);const m=(CA.months.find(x=>x.ym==ym))||{total:0};const w=n=>n.toLocaleString("ko-KR")+"원";
- $("cr").innerHTML=`<b>월별 총 식대</b><div style="font-size:28px;font-weight:800;color:var(--gd);margin-top:4px">${CP?w(m.total*CP):"단가 입력 필요"}</div><div class="sub" style="font-size:14px">${CY_}년 ${CM_}월 · 총 ${m.total}식${CP?" × "+w(CP):""}</div>`}
+function showCost(){const ym=CY_+"-"+p2(CM_);const m=(CA.months.find(x=>x.ym==ym))||{total:0,by:{}};const w=n=>n.toLocaleString("ko-KR")+"원";
+ const rows=Object.entries(m.by||{}).sort((a,b)=>b[1]-a[1]);
+ const tbl=rows.length?`<table style="margin-top:14px"><tr><th style="text-align:left">이름</th><th>식수</th><th style="text-align:right">식대</th></tr>${rows.map(([n,c])=>`<tr><td style="text-align:left">${n}</td><td>${c}</td><td style="text-align:right">${CP?w(c*CP):"-"}</td></tr>`).join("")}</table>`:'<p class="sub" style="margin-top:10px">기록 없음</p>';
+ $("cr").innerHTML=`<b>월별 총 식대</b><div style="font-size:28px;font-weight:800;color:var(--gd);margin-top:4px">${CP?w(m.total*CP):"단가 입력 필요"}</div><div class="sub" style="font-size:14px">${CY_}년 ${CM_}월 · 총 ${m.total}식${CP?" × "+w(CP):""}</div>${tbl}`}
+async function openMembers(){go(5);await loadMembers()}
+async function loadMembers(){const ms=await api("api/members");
+ $("mAct").innerHTML=ms.filter(m=>m.active).map(m=>`<div class="row"><span>${m.name}</span><button class="link" onclick="rmMember('${m.name}')">삭제</button></div>`).join("")||'<span class="sub">없음</span>';
+ $("mInact").innerHTML=ms.filter(m=>!m.active).map(m=>`<div class="row"><span>${m.name}</span><button class="link" onclick="restoreMember('${m.name}')">복귀</button></div>`).join("")||'<span class="sub">없음</span>'}
+function askPin(msg){return new Promise(res=>{$("shb").innerHTML=`<div>${msg}</div><input id="pinInput" type="password" inputmode="numeric" placeholder="관리자 PIN" style="width:100%;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit;margin:10px 0;box-sizing:border-box"><button class="btn" id="pinOk">확인</button><button class="btn o" id="pinNo" style="margin-top:8px">취소</button>`;
+ $("sh").classList.remove("hide");$("pinInput").focus();
+ const go_=()=>{const v=$("pinInput").value;cl();res(v)};
+ $("pinOk").onclick=go_;$("pinNo").onclick=()=>{cl();res(null)};
+ $("pinInput").onkeydown=e=>{if(e.key==="Enter")go_()}})}
+async function addMember(){const name=$("nn").value.trim();if(!name){toast("이름을 입력하세요",1);return}
+ const pin=await askPin(`'${name}' 추가`);if(pin===null)return;
+ try{await api("api/members",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,pin})});$("nn").value="";toast("추가됨");await loadMembers();S=null;await init()}
+ catch(e){toast(e.s==403?"PIN이 틀렸습니다":"추가 실패",1)}}
+async function rmMember(name){const pin=await askPin(`'${name}'님을 명단에서 뺍니다. 식수·패널티 기록은 그대로 남습니다.`);if(pin===null)return;
+ try{await api("api/members/"+encodeURIComponent(name),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({active:false,pin})});toast("삭제됨");await loadMembers();S=null;await init()}
+ catch(e){toast(e.s==403?"PIN이 틀렸습니다":"삭제 실패",1)}}
+async function restoreMember(name){const pin=await askPin(`'${name}' 복귀`);if(pin===null)return;
+ try{await api("api/members/"+encodeURIComponent(name),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({active:true,pin})});toast("복귀됨");await loadMembers();S=null;await init()}
+ catch(e){toast(e.s==403?"PIN이 틀렸습니다":"복귀 실패",1)}}
 init().then(()=>{go(1)});
 setInterval(()=>{if(!$("v3").classList.contains("hide")&&$("sh").classList.contains("hide"))load()},60000);
 </script></div></body></html>

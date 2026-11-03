@@ -45,12 +45,23 @@ def init_db():
         c.q("CREATE TABLE IF NOT EXISTS done(d TEXT PRIMARY KEY)")
         c.q(f"CREATE TABLE IF NOT EXISTS logs(id {ai}, at TEXT, member TEXT, d TEXT, old TEXT, new TEXT, reason TEXT)")
         c.q("CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT)")
+        # 퇴사/신입 반영용. active=0 은 숨기기만 할 뿐 meals/penalties 기록은 그대로 남긴다(월별 정산이 깨지면 안 돼서).
+        c.q(f"CREATE TABLE IF NOT EXISTS members(id {ai}, name TEXT UNIQUE NOT NULL, active INTEGER NOT NULL DEFAULT 1)")
+        for m in MEMBERS:
+            c.q("INSERT INTO members(name,active) VALUES(?,1) ON CONFLICT(name) DO NOTHING", (m,))
+        c.q("INSERT INTO meta VALUES('admin_pin','0000') ON CONFLICT DO NOTHING")
         now = datetime.now(KST)
         c.q("INSERT INTO meta VALUES('start',?) ON CONFLICT DO NOTHING", (now.date().isoformat(),))
         st = c.q("SELECT v FROM meta WHERE k='start'").fetchone()["v"]
         if st == now.date().isoformat() and now.hour >= CUTOFF:
             c.q("INSERT INTO done VALUES(?) ON CONFLICT DO NOTHING", (st,))  # 시작일이 08:00 이후면 그날은 패널티 제외
         c.commit()
+
+def active_names(c):
+    return [r["name"] for r in c.q("SELECT name FROM members WHERE active=1 ORDER BY id").fetchall()]
+
+def all_names(c):
+    return {r["name"] for r in c.q("SELECT name FROM members").fetchall()}
 
 def now_kst(): return datetime.now(KST)
 def workday(d: date): return d.weekday() < 5 and d.isoformat() not in HOLIDAYS
@@ -68,6 +79,7 @@ def snapshot():
     now = now_kst()
     with conn() as c:
         start = datetime.strptime(c.q("SELECT v FROM meta WHERE k='start'").fetchone()["v"], "%Y-%m-%d").date()
+        members = active_names(c)  # 퇴사자는 새 패널티가 안 쌓이게 활성 인원만 본다
         d = start
         while d <= now.date():
             passed = d < now.date() or now.hour >= CUTOFF
@@ -76,7 +88,7 @@ def snapshot():
                 cur = c.q("INSERT INTO done VALUES(?) ON CONFLICT DO NOTHING", (ds,))
                 if cur.rowcount == 1:
                     got = {r["member"] for r in c.q("SELECT member FROM meals WHERE d=? AND status IN ('먹음','안먹음')", (ds,)).fetchall()}
-                    for m in MEMBERS:
+                    for m in members:
                         if m not in got:
                             c.q("INSERT INTO penalties VALUES(?,?) ON CONFLICT DO NOTHING", (m, ds))
             d += timedelta(days=1)
@@ -99,10 +111,12 @@ def index(): return FileResponse("index.html")
 def state():
     snapshot(); now = now_kst()
     with conn() as c:
-        pen = {m: 0 for m in MEMBERS}
-        for r in c.q("SELECT member, COUNT(*) n FROM penalties GROUP BY member").fetchall(): pen[r["member"]] = r["n"]
+        members = active_names(c)
+        pen = {m: 0 for m in members}
+        for r in c.q("SELECT member, COUNT(*) n FROM penalties GROUP BY member").fetchall():
+            if r["member"] in pen: pen[r["member"]] = r["n"]
         start = c.q("SELECT v FROM meta WHERE k='start'").fetchone()["v"]
-    return {"today": now.date().isoformat(), "hour": now.hour, "members": MEMBERS, "penalties": pen, "start": start,
+    return {"today": now.date().isoformat(), "hour": now.hour, "members": members, "penalties": pen, "start": start,
             "open": [x.isoformat() for x in open_dates(now.date())]}
 
 def nxt(ym):
@@ -110,7 +124,9 @@ def nxt(ym):
 
 @app.get("/api/month")
 def month(ym: str, member: str):
-    if member not in MEMBERS or not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", ym): raise HTTPException(400)
+    with conn() as c0:
+        names = all_names(c0)  # 퇴사자 과거 기록도 조회는 되게 활성 여부 안 가린다
+    if member not in names or not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", ym): raise HTTPException(400)
     snapshot(); a, b = ym + "-01", nxt(ym) + "-01"
     with conn() as c:
         st = {r["d"]: r["status"] for r in c.q("SELECT d,status FROM meals WHERE member=? AND d>=? AND d<?", (member, a, b)).fetchall()}
@@ -121,9 +137,11 @@ def month(ym: str, member: str):
 def allv():
     snapshot(); days = [x.isoformat() for x in open_dates(now_kst().date())]
     with conn() as c:
+        members = active_names(c)
         rows = c.q("SELECT member,d,status FROM meals WHERE d>=? AND d<=?", (days[0], days[-1])).fetchall() if days else []
-    t = {m: {} for m in MEMBERS}
-    for r in rows: t[r["member"]][r["d"]] = r["status"]
+    t = {m: {} for m in members}
+    for r in rows:
+        if r["member"] in t: t[r["member"]][r["d"]] = r["status"]
     return {"days": days, "table": t}
 
 @app.get("/api/monthly")
@@ -143,7 +161,9 @@ class Put(BaseModel):
 
 @app.put("/api/meal")
 def put(p: Put):
-    if p.member not in MEMBERS or p.status not in STATUSES: raise HTTPException(400, "잘못된 값")
+    with conn() as c0:
+        active = set(active_names(c0))  # 퇴사자는 더 이상 체크를 못 하게 막는다
+    if p.member not in active or p.status not in STATUSES: raise HTTPException(400, "잘못된 값")
     snapshot(); now = now_kst()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", p.date): raise HTTPException(400, "잘못된 날짜")
     with conn() as c0:
@@ -188,5 +208,45 @@ def set_price(p: Price):
     if p.price < 0 or p.price > 10_000_000: raise HTTPException(400)
     with conn() as c:
         c.q("INSERT INTO meta VALUES('price',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (str(p.price),))
+        c.commit()
+    return {"ok": True}
+
+
+def check_pin(pin, c):
+    r = c.q("SELECT v FROM meta WHERE k='admin_pin'").fetchone()
+    real = r["v"] if r else "0000"
+    if pin != real: raise HTTPException(403, "PIN이 틀렸습니다")
+
+class MemberAdd(BaseModel):
+    name: str; pin: str
+
+class MemberToggle(BaseModel):
+    active: bool; pin: str
+
+@app.get("/api/members")
+def list_members():
+    with conn() as c:
+        rows = c.q("SELECT name, active FROM members ORDER BY id").fetchall()
+    return [{"name": r["name"], "active": bool(r["active"])} for r in rows]
+
+@app.post("/api/members")
+def add_member(p: MemberAdd):
+    name = p.name.strip()
+    if not name or len(name) > 10: raise HTTPException(400, "이름을 확인하세요")
+    with conn() as c:
+        check_pin(p.pin, c)
+        if c.q("SELECT 1 FROM members WHERE name=?", (name,)).fetchone():
+            c.q("UPDATE members SET active=1 WHERE name=?", (name,))  # 이미 있던 이름이면 재입사로 보고 되살린다
+        else:
+            c.q("INSERT INTO members(name,active) VALUES(?,1)", (name,))
+        c.commit()
+    return {"ok": True}
+
+@app.put("/api/members/{name}")
+def toggle_member(name: str, p: MemberToggle):
+    with conn() as c:
+        check_pin(p.pin, c)
+        if not c.q("SELECT 1 FROM members WHERE name=?", (name,)).fetchone(): raise HTTPException(404, "없는 사람입니다")
+        c.q("UPDATE members SET active=? WHERE name=?", (1 if p.active else 0, name))
         c.commit()
     return {"ok": True}
