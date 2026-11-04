@@ -1,4 +1,4 @@
-import asyncio, os, re, sqlite3
+import asyncio, bisect, os, re, sqlite3
 from contextlib import closing
 from datetime import datetime, timedelta, timezone, date
 from fastapi import FastAPI, HTTPException
@@ -49,6 +49,9 @@ def init_db():
         c.q(f"CREATE TABLE IF NOT EXISTS members(id {ai}, name TEXT UNIQUE NOT NULL, active INTEGER NOT NULL DEFAULT 1)")
         for m in MEMBERS:
             c.q("INSERT INTO members(name,active) VALUES(?,1) ON CONFLICT(name) DO NOTHING", (m,))
+        # 단가가 월 중간에도 바뀔 수 있어서(업체 변경 등, 11/3) 날짜 단위로 저장한다. 특정 날짜엔 그 날짜 이전
+        # 가장 가까운 행의 단가가 적용되고, 그마저도 없으면(prices가 비어있던 옛날) meta 'price'(레거시 단일 단가)로 떨어진다.
+        c.q("CREATE TABLE IF NOT EXISTS prices(d TEXT PRIMARY KEY, price INTEGER NOT NULL)")
         c.q("INSERT INTO meta VALUES('admin_pin','0000') ON CONFLICT DO NOTHING")
         now = datetime.now(KST)
         c.q("INSERT INTO meta VALUES('start',?) ON CONFLICT DO NOTHING", (now.date().isoformat(),))
@@ -147,13 +150,24 @@ def allv():
 @app.get("/api/monthly")
 def monthly():
     with conn() as c:
-        rows = c.q("SELECT substr(d,1,7) ym, member, COUNT(*) n FROM meals WHERE status='먹음' GROUP BY 1,2 ORDER BY 1").fetchall()
-    ms = {}
-    for r in rows: ms.setdefault(r["ym"], {})[r["member"]] = r["n"]
+        meal_rows = c.q("SELECT d, member FROM meals WHERE status='먹음' ORDER BY d").fetchall()
+        price_rows = c.q("SELECT d, price FROM prices ORDER BY d").fetchall()
+        legacy = c.q("SELECT v FROM meta WHERE k='price'").fetchone()
+    legacy_price = int(legacy["v"]) if legacy else 0
+    pds = [r["d"] for r in price_rows]; pps = [r["price"] for r in price_rows]
+    def price_on(d):
+        i = bisect.bisect_right(pds, d) - 1  # 그 날짜 이전(포함) 가장 가까운 단가
+        return pps[i] if i >= 0 else legacy_price
+    ms, ams = {}, {}  # ym -> {member: 식수} / ym -> {member: 금액}
+    for r in meal_rows:
+        d, m = r["d"], r["member"]; ym = d[:7]
+        ms.setdefault(ym, {}); ms[ym][m] = ms[ym].get(m, 0) + 1
+        ams.setdefault(ym, {}); ams[ym][m] = ams[ym].get(m, 0) + price_on(d)
     out, prev = [], None
     for ym in sorted(ms):
         tot = sum(ms[ym].values())
-        out.append({"ym": ym, "total": tot, "by": ms[ym], "diff": None if prev is None else tot - prev}); prev = tot
+        out.append({"ym": ym, "total": tot, "by": ms[ym], "amount": sum(ams[ym].values()), "by_amount": ams[ym],
+                     "diff": None if prev is None else tot - prev}); prev = tot
     return {"months": out[::-1], "now": now_kst().strftime("%Y-%m")}
 
 class Put(BaseModel):
@@ -194,20 +208,29 @@ def logs():
         return c.q("SELECT at,member,d,old,new,reason FROM logs ORDER BY id DESC LIMIT 30").fetchall() and [dict(r) for r in c.q("SELECT at,member,d,old,new,reason FROM logs ORDER BY id DESC LIMIT 30").fetchall()] or []
 
 
+def effective_price(c, d):
+    r = c.q("SELECT price FROM prices WHERE d<=? ORDER BY d DESC LIMIT 1", (d,)).fetchone()
+    if r: return r["price"]
+    r = c.q("SELECT v FROM meta WHERE k='price'").fetchone()  # prices에 아직 아무 값도 없던 날짜(레거시)
+    return int(r["v"]) if r else 0
+
 class Price(BaseModel):
-    price: int
+    d: str; price: int
 
 @app.get("/api/price")
-def get_price():
+def get_price(d: str = None):
+    if d is None: d = now_kst().date().isoformat()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d): raise HTTPException(400)
     with conn() as c:
-        r = c.q("SELECT v FROM meta WHERE k='price'").fetchone()
-    return {"price": int(r["v"]) if r else 0}
+        price = effective_price(c, d)
+    return {"d": d, "price": price}
 
 @app.put("/api/price")
 def set_price(p: Price):
     if p.price < 0 or p.price > 10_000_000: raise HTTPException(400)
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", p.d): raise HTTPException(400, "잘못된 날짜")
     with conn() as c:
-        c.q("INSERT INTO meta VALUES('price',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (str(p.price),))
+        c.q("INSERT INTO prices VALUES(?,?) ON CONFLICT(d) DO UPDATE SET price=excluded.price", (p.d, p.price))
         c.commit()
     return {"ok": True}
 

@@ -46,7 +46,7 @@ textarea{width:100%;padding:10px;border:1px solid var(--l);border-radius:10px;fo
 </div></div>
 
 <div id="v4" class="hide"><button class="back" onclick="go(1)">← 뒤로</button><div class="top"><b style="font-size:22px">식대 관리</b></div>
-<div class="card"><b>1식 단가(원)</b><div style="display:flex;gap:8px;margin-top:8px"><input id="pr" type="number" inputmode="numeric" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit"><button class="btn" style="width:90px" onclick="savePrice()">저장</button></div><p class="sub" style="font-size:13px;margin:8px 0 0">결제 금액 = 월 식수(먹음) × 단가</p></div><div id="cost"></div></div>
+<div class="card"><b>단가 변경</b><div style="display:flex;gap:8px;margin-top:8px"><input id="pd" type="date" onchange="loadCurPrice()" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit"><input id="pr" type="number" inputmode="numeric" placeholder="단가" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit"><button class="btn" style="width:90px" onclick="savePrice()">저장</button></div><p class="sub" style="font-size:13px;margin:8px 0 0">입력한 날짜부터 이 단가가 적용됩니다(그 전 날짜는 이전 단가 그대로). 업체가 바뀌는 등 월 중간에 단가가 바뀌어도 그 날부터 바로 반영됩니다.</p><p class="sub" id="curPrice" style="font-size:13px;margin:4px 0 0"></p></div><div id="cost"></div></div>
 <div id="v5" class="hide"><button class="back" onclick="go(1)">← 뒤로</button><div class="top"><b style="font-size:22px">구성원 관리</b></div>
 <div class="card"><b>새 구성원 추가</b><div style="display:flex;gap:8px;margin-top:8px"><input id="nn" placeholder="이름" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit"><button class="btn" style="width:90px" onclick="addMember()">추가</button></div></div>
 <div class="card"><b>현재 인원</b><div id="mAct" style="margin-top:8px"></div></div>
@@ -112,20 +112,26 @@ async function all(){const a=await api("api/all");const ic={"먹음":"●","안�
 async function mon(){const a=await api("api/monthly");
  $("t2").innerHTML=a.months.length?a.months.map(m=>`<div class="card"><b>${m.ym}</b> ${m.ym==a.now?"(진행 중)":""}<div style="font-size:26px;font-weight:800;color:var(--gd)">${m.total}식 ${m.diff==null?"":`<span style="font-size:14px;color:var(--m)">전월 대비 ${m.diff>0?"+":""}${m.diff}</span>`}</div><div class="sub" style="font-size:13px">${Object.entries(m.by).map(([k,v])=>k+" "+v).join(" · ")}</div></div>`).join(""):'<div class="card sub">아직 기록이 없습니다.</div>'}
 async function lg(){const a=await api("api/logs");$("t3").innerHTML=a.length?a.map(x=>`<div style="padding:6px 0;border-bottom:1px solid var(--l)"><b>${x.member}</b> ${x.d.slice(5)} ${x.old}→${x.new}<div class="sub" style="font-size:13px">${x.at} · ${x.reason}</div></div>`).join(""):'<span class="sub">08:00 이후 변경 기록이 없습니다.</span>'}
-async function openCost(){go(4);if(!S)try{S=await api("api/state")}catch(e){}
- const p=await api("api/price");$("pr").value=p.price||"";renderCost(p.price||0)}
-async function savePrice(){const v=parseInt($("pr").value||"0");await api("api/price",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({price:v})});toast("단가 저장됨");renderCost(v)}
-let CY_=2026,CM_=10,CP=0,CA=null;
+let CY_=2026,CM_=10,CA=null;
 function monOpts(y){const f=y==2026?10:1;let h="";for(let m=f;m<=12;m++)h+=`<option value="${m}"${m==CM_?" selected":""}>${m}월</option>`;return h}
-async function renderCost(price){CP=price;CA=await api("api/monthly");
+async function openCost(){go(4);if(!S)try{S=await api("api/state")}catch(e){}
+ CA=await api("api/monthly");
  const now=CA.now.split("-").map(Number);if(now[0]*100+now[1]>=202610&&now[0]*100+now[1]<=202712){CY_=now[0];CM_=now[1]}
- $("cost").innerHTML=`<div class="card"><div style="display:flex;gap:8px;margin-bottom:12px"><select id="cy" onchange="cyChg()" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit;background:#fff"><option value="2026"${CY_==2026?" selected":""}>2026년</option><option value="2027"${CY_==2027?" selected":""}>2027년</option></select><select id="cm" onchange="cmChg()" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit;background:#fff">${monOpts(CY_)}</select></div><div id="cr"></div></div>`;showCost()}
+ $("pd").value=(S&&S.today)||new Date().toISOString().slice(0,10);
+ await loadCurPrice();
+ $("cost").innerHTML=`<div class="card"><div style="display:flex;gap:8px;margin-bottom:12px"><select id="cy" onchange="cyChg()" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit;background:#fff"><option value="2026"${CY_==2026?" selected":""}>2026년</option><option value="2027"${CY_==2027?" selected":""}>2027년</option></select><select id="cm" onchange="cmChg()" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit;background:#fff">${monOpts(CY_)}</select></div><div id="cr"></div></div>`;
+ showCost()}
+async function loadCurPrice(){const d=$("pd").value;if(!d)return;const p=await api("api/price?d="+d);
+ $("pr").value=p.price||"";$("curPrice").textContent=d+" 기준 적용 중인 단가: "+(p.price?p.price.toLocaleString("ko-KR")+"원":"미설정")}
+async function savePrice(){const d=$("pd").value;const v=parseInt($("pr").value||"0");if(!d){toast("날짜를 선택하세요",1);return}
+ await api("api/price",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({d,price:v})});
+ toast(d+"부터 단가 저장됨");CA=await api("api/monthly");await loadCurPrice();showCost()}
 function cyChg(){CY_=+$("cy").value;CM_=CY_==2026?Math.max(CM_,10):CM_;$("cm").innerHTML=monOpts(CY_);showCost()}
 function cmChg(){CM_=+$("cm").value;showCost()}
-function showCost(){const ym=CY_+"-"+p2(CM_);const m=(CA.months.find(x=>x.ym==ym))||{total:0,by:{}};const w=n=>n.toLocaleString("ko-KR")+"원";
+function showCost(){const ym=CY_+"-"+p2(CM_);const m=(CA.months.find(x=>x.ym==ym))||{total:0,by:{},amount:0,by_amount:{}};const w=n=>n.toLocaleString("ko-KR")+"원";
  const rows=Object.entries(m.by||{}).sort((a,b)=>b[1]-a[1]);
- const tbl=rows.length?`<table style="margin-top:14px"><tr><th style="text-align:left">이름</th><th>식수</th><th style="text-align:right">식대</th></tr>${rows.map(([n,c])=>`<tr><td style="text-align:left">${n}</td><td>${c}</td><td style="text-align:right">${CP?w(c*CP):"-"}</td></tr>`).join("")}</table>`:'<p class="sub" style="margin-top:10px">기록 없음</p>';
- $("cr").innerHTML=`<b>월별 총 식대</b><div style="font-size:28px;font-weight:800;color:var(--gd);margin-top:4px">${CP?w(m.total*CP):"단가 입력 필요"}</div><div class="sub" style="font-size:14px">${CY_}년 ${CM_}월 · 총 ${m.total}식${CP?" × "+w(CP):""}</div>${tbl}`}
+ const tbl=rows.length?`<table style="margin-top:14px"><tr><th style="text-align:left">이름</th><th>식수</th><th style="text-align:right">식대</th></tr>${rows.map(([n,c])=>`<tr><td style="text-align:left">${n}</td><td>${c}</td><td style="text-align:right">${w(m.by_amount[n]||0)}</td></tr>`).join("")}</table>`:'<p class="sub" style="margin-top:10px">기록 없음</p>';
+ $("cr").innerHTML=`<b>월별 총 식대</b><div style="font-size:28px;font-weight:800;color:var(--gd);margin-top:4px">${w(m.amount||0)}</div><div class="sub" style="font-size:14px">${CY_}년 ${CM_}월 · 총 ${m.total}식 (단가가 달 중간에 바뀌었으면 날짜별로 따로 계산됨)</div>${tbl}`}
 async function openMembers(){go(5);await loadMembers()}
 async function loadMembers(){const ms=await api("api/members");
  $("mAct").innerHTML=ms.filter(m=>m.active).map(m=>`<div class="row"><span>${m.name}</span><button class="link" onclick="rmMember('${m.name}')">삭제</button></div>`).join("")||'<span class="sub">없음</span>';
