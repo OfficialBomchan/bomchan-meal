@@ -16,7 +16,7 @@ h1{font-size:28px;margin:8px 0}.sub{color:var(--m)}
 .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.nav button{width:40px;height:40px;border-radius:10px;border:1px solid var(--l);background:#fff;color:var(--gd);font-size:18px;cursor:pointer}.nav button:disabled{opacity:.3}
 .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}.dow{text-align:center;color:var(--m);font-size:13px}
 .c{aspect-ratio:1/1.05;border:1px solid var(--l);border-radius:10px;background:#fff;padding:4px;text-align:center;font-size:15px;font-weight:700}.c small{display:block;font-size:11px;font-weight:600}
-.c.off{border:0;background:none}.c.ed{border:2px dashed var(--y);cursor:pointer}.c.eat{background:var(--g);color:#fff;border:2px solid var(--g)}.c.skip{background:#e6e9e6;color:var(--m);border:2px solid #e6e9e6}.c.pen{border-color:var(--r);color:var(--r)}
+.c.off{border:0;background:none}.c.ed{border:2px dashed var(--y);cursor:pointer}.c.eat{background:var(--g);color:#fff;border:2px solid var(--g)}.c.skip{background:#e6e9e6;color:var(--m);border:2px solid #e6e9e6}.c.pen{border-color:var(--r);color:var(--r)}.c.eo{background:#fff;color:var(--y);border:2px solid var(--y)}
 .c.ed.und{color:var(--y)}.c.sel{outline:3px solid var(--gd)}
 table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px solid var(--l);padding:6px 2px;text-align:center}
 .sheet{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center;z-index:9}
@@ -41,7 +41,7 @@ textarea{width:100%;padding:10px;border:1px solid var(--l);border-radius:10px;fo
 <div class="tabs" id="tabs"></div>
 <div id="t0"><div class="nav"><button id="pv" onclick="mv(-1)">◀</button><b id="ym" style="font-size:18px"></b><button id="nx" onclick="mv(1)">▶</button></div>
 <div class="grid" id="dow"></div><div class="grid" id="cal" style="margin-top:6px"></div>
-<p class="sub" style="font-size:13px">지난 날짜도 눌러서 고칠 수 있습니다(사유 입력 필요). 점선 날짜를 누르면 먹음 / 안먹음을 바로 고를 수 있습니다. 다 고른 뒤 아래 <b>저장하기</b>를 눌러야 반영됩니다.</p><p id="dn" class="sub" style="font-size:13px;margin:0"></p><button class="btn" id="sv" onclick="save()" style="margin-top:10px">저장하기</button></div>
+<p class="sub" style="font-size:13px">지난 날짜도 눌러서 고칠 수 있습니다(사유 입력 필요). 점선 날짜를 누르면 먹음 / 안먹음을 바로 고를 수 있습니다. 다 고른 뒤 아래 <b>저장하기</b>를 눌러야 반영됩니다.</p><p id="dn" class="sub" style="font-size:13px;margin:0"></p><button class="btn" id="sv" onclick="save()" style="margin-top:10px">저장하기</button><button class="btn o" id="eo" onclick="openEatout()" style="margin-top:10px">외식으로 표시</button></div>
 <div id="t1" class="hide card"></div><div id="t2" class="hide"></div><div id="t3" class="hide card"></div>
 </div></div>
 
@@ -81,6 +81,7 @@ function draw(){const ym=Y+"-"+p2(M);
  for(let d=1;d<=n;d++){const w=new Date(Y,M-1,d).getDay();if(w==0||w==6)continue;
   const ds=ym+"-"+p2(d);if(first){h+='<div></div>'.repeat(w-1);first=false}
   if(D.off.includes(ds)){h+='<div class="c off"></div>';continue}
+  if(D.eatout&&D.eatout.includes(ds)){h+=`<div class="c eo">${d}<small>외식</small></div>`;continue}
   const past=ds<S.today&&ds>=S.start;const ed=S.open.includes(ds)||past;if(ed)savedMap[ds]=D.status[ds]||"미정";
   const s=ed?(draft[ds]??savedMap[ds]):D.status[ds];let c="c",sub="";
   if(s=="먹음"){c+=" eat";sub="먹음"}else if(s=="안먹음"){c+=" skip";sub="안먹음"}
@@ -103,14 +104,22 @@ async function save(){const ks=Object.keys(draft);if(!ks.length)return;let reaso
   draft={};savedMap={};load();done(late)}
  catch(e){toast("저장 실패: 일부만 저장됐을 수 있습니다",1);draft={};savedMap={};load()}}
 function done(late){$("shb").innerHTML=`<div style="text-align:center;padding:8px 0 4px"><div style="font-size:40px;color:var(--g)">✓</div><b style="font-size:20px">선택이 완료되었습니다</b>${late?'<div class="warn" style="margin-top:12px">지난 날짜 또는 08:00 이후 변경입니다.<br>담당자께 반드시 구두로 공유하세요.</div>':""}</div><button class="btn" onclick="cl()">확인</button>`;$("sh").classList.remove("hide")}
+function openEatout(){const opens=S.open;
+ $("shb").innerHTML=`<div style="text-align:center;font-weight:700;margin-bottom:12px;font-size:17px">외식으로 표시할 날짜</div>`+
+ opens.map(d=>{const on=D&&D.eatout&&D.eatout.includes(d);return `<button class="btn o" onclick="toggleEatout('${d}',${!on})" style="margin-top:8px">${+d.slice(5,7)}월 ${+d.slice(8)}일${on?" · 외식 취소":""}</button>`}).join("")+
+ `<button class="btn o" id="eoNo" style="margin-top:8px">닫기</button>`;
+ $("sh").classList.remove("hide");$("eoNo").onclick=cl}
+async function toggleEatout(d,on){const pin=await askPin((on?d+" 전체를 외식으로 표시합니다. 그날 개인별 선택은 지워지고 식대·패널티에서 빠집니다.":d+" 외식 표시를 취소합니다."));if(pin===null)return;
+ try{await api("api/eatout",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({d,pin,on})});toast(on?"외식으로 표시됨":"외식 취소됨");cl();draft={};savedMap={};await cal()}
+ catch(e){toast(e.s==403?"PIN이 틀렸습니다":"처리 실패",1)}}
 function ask(past){return new Promise(res=>{$("shb").innerHTML=`<div class="warn">${past?"⚠ 지난 날짜를 수정합니다.":"08:00이 지났습니다."} 변경 사유를 입력하세요.<br>담당자께 반드시 구두로 공유해야 합니다.</div><textarea id="rs" rows="3" placeholder="사유"></textarea><button class="btn" id="ok">확인</button><button class="btn o" id="no">취소</button>`;
  $("sh").classList.remove("hide");$("no").onclick=()=>{cl();res(null)};$("ok").onclick=()=>{const v=$("rs").value.trim();if(!v){$("rs").focus();return}cl();res(v)}})}
-async function all(){const a=await api("api/all");const ic={"먹음":"●","안먹음":"×"};const NM=S.members;
- $("t1").innerHTML="<table><tr><th></th>"+a.days.map(d=>`<th>${+d.slice(5,7)}/${+d.slice(8)}</th>`).join("")+"</tr>"+
- NM.map(m=>`<tr><td><b>${m}</b></td>`+a.days.map(d=>`<td>${ic[a.table[m][d]]||"·"}</td>`).join("")+"</tr>").join("")+
- "<tr><td><b>먹음</b></td>"+a.days.map(d=>`<td><b>${NM.filter(m=>a.table[m][d]=="먹음").length}</b></td>`).join("")+"</tr></table><p class='sub' style='font-size:12px'>● 먹음 × 안먹음 · 미정</p>"}
+async function all(){const a=await api("api/all");const ic={"먹음":"●","안먹음":"×"};const NM=S.members;const eo=a.eatout||[];
+ $("t1").innerHTML="<table><tr><th></th>"+a.days.map(d=>`<th>${+d.slice(5,7)}/${+d.slice(8)}${eo.includes(d)?" 🍽":""}</th>`).join("")+"</tr>"+
+ NM.map(m=>`<tr><td><b>${m}</b></td>`+a.days.map(d=>`<td>${eo.includes(d)?"외식":(ic[a.table[m][d]]||"·")}</td>`).join("")+"</tr>").join("")+
+ "<tr><td><b>먹음</b></td>"+a.days.map(d=>`<td><b>${eo.includes(d)?"-":NM.filter(m=>a.table[m][d]=="먹음").length}</b></td>`).join("")+"</tr></table><p class='sub' style='font-size:12px'>● 먹음 × 안먹음 · 미정 · 🍽 외식</p>"}
 async function mon(){const a=await api("api/monthly");
- $("t2").innerHTML=a.months.length?a.months.map(m=>`<div class="card"><b>${m.ym}</b> ${m.ym==a.now?"(진행 중)":""}<div style="font-size:26px;font-weight:800;color:var(--gd)">${m.total}식 ${m.diff==null?"":`<span style="font-size:14px;color:var(--m)">전월 대비 ${m.diff>0?"+":""}${m.diff}</span>`}</div><div class="sub" style="font-size:13px">${Object.entries(m.by).map(([k,v])=>k+" "+v).join(" · ")}</div></div>`).join(""):'<div class="card sub">아직 기록이 없습니다.</div>'}
+ $("t2").innerHTML=a.months.length?a.months.map(m=>`<div class="card"><b>${m.ym}</b> ${m.ym==a.now?"(진행 중)":""}<div style="font-size:26px;font-weight:800;color:var(--gd)">${m.total}식 ${m.diff==null?"":`<span style="font-size:14px;color:var(--m)">전월 대비 ${m.diff>0?"+":""}${m.diff}</span>`}</div><div class="sub" style="font-size:13px">${Object.entries(m.by).map(([k,v])=>k+" "+v).join(" · ")}</div>${m.eatout?`<div class="sub" style="font-size:13px;margin-top:2px">외식 ${m.eatout}회</div>`:""}</div>`).join(""):'<div class="card sub">아직 기록이 없습니다.</div>'}
 async function lg(){const a=await api("api/logs");$("t3").innerHTML=a.length?a.map(x=>`<div style="padding:6px 0;border-bottom:1px solid var(--l)"><b>${x.member}</b> ${x.d.slice(5)} ${x.old}→${x.new}<div class="sub" style="font-size:13px">${x.at} · ${x.reason}</div></div>`).join(""):'<span class="sub">08:00 이후 변경 기록이 없습니다.</span>'}
 let CY_=2026,CM_=10,CA=null;
 function monOpts(y){const f=y==2026?10:1;let h="";for(let m=f;m<=12;m++)h+=`<option value="${m}"${m==CM_?" selected":""}>${m}월</option>`;return h}

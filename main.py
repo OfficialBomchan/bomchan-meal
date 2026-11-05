@@ -52,6 +52,8 @@ def init_db():
         # 단가가 월 중간에도 바뀔 수 있어서(업체 변경 등, 11/3) 날짜 단위로 저장한다. 특정 날짜엔 그 날짜 이전
         # 가장 가까운 행의 단가가 적용되고, 그마저도 없으면(prices가 비어있던 옛날) meta 'price'(레거시 단일 단가)로 떨어진다.
         c.q("CREATE TABLE IF NOT EXISTS prices(d TEXT PRIMARY KEY, price INTEGER NOT NULL)")
+        # 단체 외식일. 식대·패널티 계산에서 빠지고, 그날 개인별 체크는 잠긴다.
+        c.q("CREATE TABLE IF NOT EXISTS eatout(d TEXT PRIMARY KEY)")
         c.q("INSERT INTO meta VALUES('admin_pin','0000') ON CONFLICT DO NOTHING")
         now = datetime.now(KST)
         c.q("INSERT INTO meta VALUES('start',?) ON CONFLICT DO NOTHING", (now.date().isoformat(),))
@@ -83,13 +85,14 @@ def snapshot():
     with conn() as c:
         start = datetime.strptime(c.q("SELECT v FROM meta WHERE k='start'").fetchone()["v"], "%Y-%m-%d").date()
         members = active_names(c)  # 퇴사자는 새 패널티가 안 쌓이게 활성 인원만 본다
+        eo = {r["d"] for r in c.q("SELECT d FROM eatout").fetchall()}  # 외식일은 패널티 대상 제외
         d = start
         while d <= now.date():
             passed = d < now.date() or now.hour >= CUTOFF
             ds = d.isoformat()
             if passed and workday(d):
                 cur = c.q("INSERT INTO done VALUES(?) ON CONFLICT DO NOTHING", (ds,))
-                if cur.rowcount == 1:
+                if cur.rowcount == 1 and ds not in eo:
                     got = {r["member"] for r in c.q("SELECT member FROM meals WHERE d=? AND status IN ('먹음','안먹음')", (ds,)).fetchall()}
                     for m in members:
                         if m not in got:
@@ -134,7 +137,8 @@ def month(ym: str, member: str):
     with conn() as c:
         st = {r["d"]: r["status"] for r in c.q("SELECT d,status FROM meals WHERE member=? AND d>=? AND d<?", (member, a, b)).fetchall()}
         pn = [r["d"] for r in c.q("SELECT d FROM penalties WHERE member=? AND d>=? AND d<?", (member, a, b)).fetchall()]
-    return {"ym": ym, "status": st, "penalty": pn, "off": sorted(d for d in HOLIDAYS if d.startswith(ym))}
+        eo = [r["d"] for r in c.q("SELECT d FROM eatout WHERE d>=? AND d<?", (a, b)).fetchall()]
+    return {"ym": ym, "status": st, "penalty": pn, "off": sorted(d for d in HOLIDAYS if d.startswith(ym)), "eatout": eo}
 
 @app.get("/api/all")
 def allv():
@@ -142,10 +146,11 @@ def allv():
     with conn() as c:
         members = active_names(c)
         rows = c.q("SELECT member,d,status FROM meals WHERE d>=? AND d<=?", (days[0], days[-1])).fetchall() if days else []
+        eo = [r["d"] for r in c.q("SELECT d FROM eatout WHERE d>=? AND d<=?", (days[0], days[-1])).fetchall()] if days else []
     t = {m: {} for m in members}
     for r in rows:
         if r["member"] in t: t[r["member"]][r["d"]] = r["status"]
-    return {"days": days, "table": t}
+    return {"days": days, "table": t, "eatout": eo}
 
 @app.get("/api/monthly")
 def monthly():
@@ -153,6 +158,7 @@ def monthly():
         meal_rows = c.q("SELECT d, member FROM meals WHERE status='먹음' ORDER BY d").fetchall()
         price_rows = c.q("SELECT d, price FROM prices ORDER BY d").fetchall()
         legacy = c.q("SELECT v FROM meta WHERE k='price'").fetchone()
+        eo_rows = c.q("SELECT d FROM eatout").fetchall()
     legacy_price = int(legacy["v"]) if legacy else 0
     pds = [r["d"] for r in price_rows]; pps = [r["price"] for r in price_rows]
     def price_on(d):
@@ -163,10 +169,14 @@ def monthly():
         d, m = r["d"], r["member"]; ym = d[:7]
         ms.setdefault(ym, {}); ms[ym][m] = ms[ym].get(m, 0) + 1
         ams.setdefault(ym, {}); ams[ym][m] = ams[ym].get(m, 0) + price_on(d)
+    eo_counts = {}  # ym -> 외식 일수 (식수·식대 집계에는 안 들어감)
+    for r in eo_rows:
+        ym = r["d"][:7]; eo_counts[ym] = eo_counts.get(ym, 0) + 1
     out, prev = [], None
-    for ym in sorted(ms):
-        tot = sum(ms[ym].values())
-        out.append({"ym": ym, "total": tot, "by": ms[ym], "amount": sum(ams[ym].values()), "by_amount": ams[ym],
+    for ym in sorted(set(ms) | set(eo_counts)):
+        tot = sum(ms.get(ym, {}).values())
+        out.append({"ym": ym, "total": tot, "by": ms.get(ym, {}), "amount": sum(ams.get(ym, {}).values()), "by_amount": ams.get(ym, {}),
+                     "eatout": eo_counts.get(ym, 0),
                      "diff": None if prev is None else tot - prev}); prev = tot
     return {"months": out[::-1], "now": now_kst().strftime("%Y-%m")}
 
@@ -190,6 +200,8 @@ def put(p: Put):
         raise HTTPException(400, "변경할 수 없는 날짜")
     late = past or (p.date == today and now.hour >= CUTOFF)
     if late and not p.reason.strip(): raise HTTPException(422, "사유 필요")
+    with conn() as c0:
+        if c0.q("SELECT 1 FROM eatout WHERE d=?", (p.date,)).fetchone(): raise HTTPException(400, "외식으로 표시된 날짜입니다")
     with conn() as c:
         r = c.q("SELECT status FROM meals WHERE member=? AND d=?", (p.member, p.date)).fetchone()
         old = r["status"] if r else "미정"
@@ -234,6 +246,26 @@ def set_price(p: Price):
         c.commit()
     return {"ok": True}
 
+
+class Eatout(BaseModel):
+    d: str; pin: str; on: bool = True
+
+@app.put("/api/eatout")
+def set_eatout(p: Eatout):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", p.d): raise HTTPException(400, "잘못된 날짜")
+    with conn() as c0:
+        check_pin(p.pin, c0)
+    if p.d not in [x.isoformat() for x in open_dates(now_kst().date())]:
+        raise HTTPException(400, "지정할 수 없는 날짜")
+    with conn() as c:
+        if p.on:
+            c.q("INSERT INTO eatout VALUES(?) ON CONFLICT(d) DO NOTHING", (p.d,))
+            c.q("DELETE FROM meals WHERE d=?", (p.d,))
+            c.q("DELETE FROM penalties WHERE d=?", (p.d,))
+        else:
+            c.q("DELETE FROM eatout WHERE d=?", (p.d,))
+        c.commit()
+    return {"ok": True}
 
 def check_pin(pin, c):
     r = c.q("SELECT v FROM meta WHERE k='admin_pin'").fetchone()
