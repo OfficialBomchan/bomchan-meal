@@ -154,11 +154,13 @@ def allv():
 
 @app.get("/api/monthly")
 def monthly():
+    today = now_kst().date().isoformat()
     with conn() as c:
-        meal_rows = c.q("SELECT d, member FROM meals WHERE status='먹음' ORDER BY d").fetchall()
+        # 미리 선택해둔 미래(최대 근무일 5일 뒤) 식수는 아직 실제로 먹은 게 아니므로 제외하고, 과거·오늘 것만 집계한다.
+        meal_rows = c.q("SELECT d, member FROM meals WHERE status='먹음' AND d<=? ORDER BY d", (today,)).fetchall()
         price_rows = c.q("SELECT d, price FROM prices ORDER BY d").fetchall()
         legacy = c.q("SELECT v FROM meta WHERE k='price'").fetchone()
-        eo_rows = c.q("SELECT d FROM eatout").fetchall()
+        eo_rows = c.q("SELECT d FROM eatout WHERE d<=?", (today,)).fetchall()
     legacy_price = int(legacy["v"]) if legacy else 0
     pds = [r["d"] for r in price_rows]; pps = [r["price"] for r in price_rows]
     def price_on(d):
