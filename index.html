@@ -106,9 +106,9 @@ function done(late){$("shb").innerHTML=`<div style="text-align:center;padding:8p
 function ask(past){return new Promise(res=>{$("shb").innerHTML=`<div class="warn">${past?"⚠ 지난 날짜를 수정합니다.":"08:00이 지났습니다."} 변경 사유를 입력하세요.<br>담당자께 반드시 구두로 공유해야 합니다.</div><textarea id="rs" rows="3" placeholder="사유"></textarea><button class="btn" id="ok">확인</button><button class="btn o" id="no">취소</button>`;
  $("sh").classList.remove("hide");$("no").onclick=()=>{cl();res(null)};$("ok").onclick=()=>{const v=$("rs").value.trim();if(!v){$("rs").focus();return}cl();res(v)}})}
 async function all(){const a=await api("api/all");const ic={"먹음":"●","안먹음":"×"};const NM=S.members;
- $("t1").innerHTML="<table><tr><th></th>"+a.days.map(d=>`<th>${+d.slice(5,7)}/${+d.slice(8)}</th>`).join("")+"<th>패널티</th></tr>"+
- NM.map(m=>`<tr><td><b>${m}</b></td>`+a.days.map(d=>`<td>${ic[a.table[m][d]]||"·"}</td>`).join("")+`<td>${S.penalties[m]}</td></tr>`).join("")+
- "<tr><td><b>먹음</b></td>"+a.days.map(d=>`<td><b>${NM.filter(m=>a.table[m][d]=="먹음").length}</b></td>`).join("")+"<td></td></tr></table><p class='sub' style='font-size:12px'>● 먹음 × 안먹음 · 미정</p>"}
+ $("t1").innerHTML="<table><tr><th></th>"+a.days.map(d=>`<th>${+d.slice(5,7)}/${+d.slice(8)}</th>`).join("")+"</tr>"+
+ NM.map(m=>`<tr><td><b>${m}</b></td>`+a.days.map(d=>`<td>${ic[a.table[m][d]]||"·"}</td>`).join("")+"</tr>").join("")+
+ "<tr><td><b>먹음</b></td>"+a.days.map(d=>`<td><b>${NM.filter(m=>a.table[m][d]=="먹음").length}</b></td>`).join("")+"</tr></table><p class='sub' style='font-size:12px'>● 먹음 × 안먹음 · 미정</p>"}
 async function mon(){const a=await api("api/monthly");
  $("t2").innerHTML=a.months.length?a.months.map(m=>`<div class="card"><b>${m.ym}</b> ${m.ym==a.now?"(진행 중)":""}<div style="font-size:26px;font-weight:800;color:var(--gd)">${m.total}식 ${m.diff==null?"":`<span style="font-size:14px;color:var(--m)">전월 대비 ${m.diff>0?"+":""}${m.diff}</span>`}</div><div class="sub" style="font-size:13px">${Object.entries(m.by).map(([k,v])=>k+" "+v).join(" · ")}</div></div>`).join(""):'<div class="card sub">아직 기록이 없습니다.</div>'}
 async function lg(){const a=await api("api/logs");$("t3").innerHTML=a.length?a.map(x=>`<div style="padding:6px 0;border-bottom:1px solid var(--l)"><b>${x.member}</b> ${x.d.slice(5)} ${x.old}→${x.new}<div class="sub" style="font-size:13px">${x.at} · ${x.reason}</div></div>`).join(""):'<span class="sub">08:00 이후 변경 기록이 없습니다.</span>'}
