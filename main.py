@@ -252,6 +252,20 @@ def set_price(p: Price):
         c.commit()
     return {"ok": True}
 
+@app.get("/api/prices")
+def list_prices():
+    with conn() as c:
+        rows = c.q("SELECT d, price, vendor FROM prices ORDER BY d DESC").fetchall()
+    return [{"d": r["d"], "price": r["price"], "vendor": r["vendor"] or ""} for r in rows]
+
+@app.delete("/api/price/{d}")
+def delete_price(d: str):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d): raise HTTPException(400, "잘못된 날짜")
+    with conn() as c:
+        c.q("DELETE FROM prices WHERE d=?", (d,))
+        c.commit()
+    return {"ok": True}
+
 
 class Eatout(BaseModel):
     d: str; pin: str; on: bool = True
