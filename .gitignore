@@ -1,0 +1,5 @@
+venv/
+meal.db
+uvicorn.log
+uvicorn.err.log
+__pycache__/

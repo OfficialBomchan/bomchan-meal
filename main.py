@@ -52,6 +52,8 @@ def init_db():
         # 단가가 월 중간에도 바뀔 수 있어서(업체 변경 등, 11/3) 날짜 단위로 저장한다. 특정 날짜엔 그 날짜 이전
         # 가장 가까운 행의 단가가 적용되고, 그마저도 없으면(prices가 비어있던 옛날) meta 'price'(레거시 단일 단가)로 떨어진다.
         c.q("CREATE TABLE IF NOT EXISTS prices(d TEXT PRIMARY KEY, price INTEGER NOT NULL)")
+        try: c.q("ALTER TABLE prices ADD COLUMN vendor TEXT NOT NULL DEFAULT ''")  # 기존 DB에 업체명 칸 추가(이미 있으면 에러 무시)
+        except Exception: (c.c.connection if c.pg else c.db).rollback()
         # 단체 외식일. 식대·패널티 계산에서 빠지고, 그날 개인별 체크는 잠긴다.
         c.q("CREATE TABLE IF NOT EXISTS eatout(d TEXT PRIMARY KEY)")
         c.q("INSERT INTO meta VALUES('admin_pin','0000') ON CONFLICT DO NOTHING")
@@ -158,19 +160,20 @@ def monthly():
     with conn() as c:
         # 미리 선택해둔 미래(최대 근무일 5일 뒤) 식수는 아직 실제로 먹은 게 아니므로 제외하고, 과거·오늘 것만 집계한다.
         meal_rows = c.q("SELECT d, member FROM meals WHERE status='먹음' AND d<=? ORDER BY d", (today,)).fetchall()
-        price_rows = c.q("SELECT d, price FROM prices ORDER BY d").fetchall()
+        price_rows = c.q("SELECT d, price, vendor FROM prices ORDER BY d").fetchall()
         legacy = c.q("SELECT v FROM meta WHERE k='price'").fetchone()
         eo_rows = c.q("SELECT d FROM eatout WHERE d<=?", (today,)).fetchall()
     legacy_price = int(legacy["v"]) if legacy else 0
-    pds = [r["d"] for r in price_rows]; pps = [r["price"] for r in price_rows]
+    pds = [r["d"] for r in price_rows]; pps = [r["price"] for r in price_rows]; pvs = [r["vendor"] or "" for r in price_rows]
     def price_on(d):
-        i = bisect.bisect_right(pds, d) - 1  # 그 날짜 이전(포함) 가장 가까운 단가
-        return pps[i] if i >= 0 else legacy_price
-    ms, ams = {}, {}  # ym -> {member: 식수} / ym -> {member: 금액}
+        i = bisect.bisect_right(pds, d) - 1  # 그 날짜 이전(포함) 가장 가까운 단가·업체
+        return (pps[i], pvs[i]) if i >= 0 else (legacy_price, "")
+    ms, ams, vms = {}, {}, {}  # ym -> {member: 식수} / ym -> {member: 금액} / ym -> {업체: 금액}
     for r in meal_rows:
-        d, m = r["d"], r["member"]; ym = d[:7]
+        d, m = r["d"], r["member"]; ym = d[:7]; price, vendor = price_on(d)
         ms.setdefault(ym, {}); ms[ym][m] = ms[ym].get(m, 0) + 1
-        ams.setdefault(ym, {}); ams[ym][m] = ams[ym].get(m, 0) + price_on(d)
+        ams.setdefault(ym, {}); ams[ym][m] = ams[ym].get(m, 0) + price
+        vms.setdefault(ym, {}); vk = vendor or "업체 미지정"; vms[ym][vk] = vms[ym].get(vk, 0) + price
     eo_counts = {}  # ym -> 외식 일수 (식수·식대 집계에는 안 들어감)
     for r in eo_rows:
         ym = r["d"][:7]; eo_counts[ym] = eo_counts.get(ym, 0) + 1
@@ -178,7 +181,7 @@ def monthly():
     for ym in sorted(set(ms) | set(eo_counts)):
         tot = sum(ms.get(ym, {}).values())
         out.append({"ym": ym, "total": tot, "by": ms.get(ym, {}), "amount": sum(ams.get(ym, {}).values()), "by_amount": ams.get(ym, {}),
-                     "eatout": eo_counts.get(ym, 0),
+                     "by_vendor": vms.get(ym, {}), "eatout": eo_counts.get(ym, 0),
                      "diff": None if prev is None else tot - prev}); prev = tot
     return {"months": out[::-1], "now": now_kst().strftime("%Y-%m")}
 
@@ -223,28 +226,29 @@ def logs():
 
 
 def effective_price(c, d):
-    r = c.q("SELECT price FROM prices WHERE d<=? ORDER BY d DESC LIMIT 1", (d,)).fetchone()
-    if r: return r["price"]
+    r = c.q("SELECT price, vendor FROM prices WHERE d<=? ORDER BY d DESC LIMIT 1", (d,)).fetchone()
+    if r: return r["price"], r["vendor"] or ""
     r = c.q("SELECT v FROM meta WHERE k='price'").fetchone()  # prices에 아직 아무 값도 없던 날짜(레거시)
-    return int(r["v"]) if r else 0
+    return (int(r["v"]) if r else 0), ""
 
 class Price(BaseModel):
-    d: str; price: int
+    d: str; price: int; vendor: str = ""
 
 @app.get("/api/price")
 def get_price(d: str = None):
     if d is None: d = now_kst().date().isoformat()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d): raise HTTPException(400)
     with conn() as c:
-        price = effective_price(c, d)
-    return {"d": d, "price": price}
+        price, vendor = effective_price(c, d)
+    return {"d": d, "price": price, "vendor": vendor}
 
 @app.put("/api/price")
 def set_price(p: Price):
     if p.price < 0 or p.price > 10_000_000: raise HTTPException(400)
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", p.d): raise HTTPException(400, "잘못된 날짜")
+    if len(p.vendor) > 30: raise HTTPException(400, "업체명을 확인하세요")
     with conn() as c:
-        c.q("INSERT INTO prices VALUES(?,?) ON CONFLICT(d) DO UPDATE SET price=excluded.price", (p.d, p.price))
+        c.q("INSERT INTO prices(d,price,vendor) VALUES(?,?,?) ON CONFLICT(d) DO UPDATE SET price=excluded.price, vendor=excluded.vendor", (p.d, p.price, p.vendor.strip()))
         c.commit()
     return {"ok": True}
 
