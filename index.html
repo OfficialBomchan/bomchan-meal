@@ -46,8 +46,8 @@ textarea{width:100%;padding:10px;border:1px solid var(--l);border-radius:10px;fo
 </div></div>
 
 <div id="v4" class="hide"><button class="back" onclick="go(1)">← 뒤로</button><div class="top"><b style="font-size:22px">식대 관리</b></div>
-<div class="card"><b>단가 변경</b><div style="margin-top:8px"><input id="pd" type="date" onchange="loadCurPrice()" style="width:100%;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit;box-sizing:border-box"></div><div style="display:flex;gap:8px;margin-top:8px"><input id="pvn" placeholder="업체명" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit"><input id="pr" type="number" inputmode="numeric" placeholder="단가" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit"><button class="btn" style="width:90px" onclick="savePrice()">저장</button></div><p class="sub" style="font-size:13px;margin:8px 0 0">입력한 날짜부터 이 업체·단가가 적용됩니다(그 전 날짜는 이전 값 그대로). 업체가 바뀌는 등 월 중간에 바뀌어도 그 날부터 바로 반영됩니다.</p><p class="sub" id="curPrice" style="font-size:13px;margin:4px 0 0"></p></div>
-<div class="card"><b>단가 변경 이력</b><div id="plist" style="margin-top:8px"></div></div>
+<div class="card"><div class="top" style="margin-bottom:0"><b id="pTitle">단가 변경</b><button class="link" id="pResetBtn" onclick="resetPriceForm()" style="display:none">+ 새로 추가</button></div><div style="margin-top:8px"><input id="pd" type="date" onchange="loadCurPrice()" style="width:100%;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit;box-sizing:border-box"></div><div style="display:flex;gap:8px;margin-top:8px"><input id="pvn" placeholder="업체명" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit"><input id="pr" type="number" inputmode="numeric" placeholder="단가" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit"><button class="btn" style="width:90px" id="pbtn" onclick="savePrice()">저장</button></div><p class="sub" style="font-size:13px;margin:8px 0 0">입력한 날짜부터 이 업체·단가가 적용됩니다(그 전 날짜는 이전 값 그대로). 업체가 바뀌는 등 월 중간에 바뀌어도 그 날부터 바로 반영됩니다.</p><p class="sub" id="curPrice" style="font-size:13px;margin:4px 0 0"></p></div>
+<div class="card"><b>식당 변경 이력</b><div id="plist" style="margin-top:8px"></div></div>
 <div id="cost"></div></div>
 <div id="v5" class="hide"><button class="back" onclick="go(1)">← 뒤로</button><div class="top"><b style="font-size:22px">구성원 관리</b></div>
 <div class="card"><b>새 구성원 추가</b><div style="display:flex;gap:8px;margin-top:8px"><input id="nn" placeholder="이름" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit"><button class="btn" style="width:90px" onclick="addMember()">추가</button></div></div>
@@ -128,6 +128,7 @@ function monOpts(y){const f=y==2026?10:1;let h="";for(let m=f;m<=12;m++)h+=`<opt
 async function openCost(){go(4);if(!S)try{S=await api("api/state")}catch(e){}
  CA=await api("api/monthly");
  const now=CA.now.split("-").map(Number);if(now[0]*100+now[1]>=202610&&now[0]*100+now[1]<=202712){CY_=now[0];CM_=now[1]}
+ editingPrice=null;$("pTitle").textContent="단가 변경";$("pbtn").textContent="저장";$("pResetBtn").style.display="none";
  $("pd").value=(S&&S.today)||new Date().toISOString().slice(0,10);
  await loadCurPrice();await loadPriceList();
  $("cost").innerHTML=`<div class="card"><div style="display:flex;gap:8px;margin-bottom:12px"><select id="cy" onchange="cyChg()" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit;background:#fff"><option value="2026"${CY_==2026?" selected":""}>2026년</option><option value="2027"${CY_==2027?" selected":""}>2027년</option></select><select id="cm" onchange="cmChg()" style="flex:1;padding:12px;border:1px solid var(--l);border-radius:10px;font:inherit;background:#fff">${monOpts(CY_)}</select></div><div id="cr"></div></div>`;
@@ -137,7 +138,7 @@ async function loadCurPrice(){const d=$("pd").value;if(!d)return;const p=await a
  $("curPrice").textContent=d+" 기준 적용 중: "+(p.price?(p.vendor||"업체 미지정")+" · "+p.price.toLocaleString("ko-KR")+"원":"미설정")}
 async function savePrice(){const d=$("pd").value;const v=parseInt($("pr").value||"0");const vendor=$("pvn").value.trim();if(!d){toast("날짜를 선택하세요",1);return}
  await api("api/price",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({d,price:v,vendor})});
- toast(d+"부터 저장됨");CA=await api("api/monthly");await loadCurPrice();await loadPriceList();showCost()}
+ toast(editingPrice?"수정됨":d+"부터 저장됨");resetPriceForm();CA=await api("api/monthly");await loadCurPrice();await loadPriceList();showCost()}
 const md=d=>+d.slice(5,7)+"/"+ +d.slice(8);
 async function loadPriceList(){const list=await api("api/prices");
  $("plist").innerHTML=list.length?list.map((r,i)=>{
@@ -148,7 +149,12 @@ async function loadPriceList(){const list=await api("api/prices");
    <div><button class="link" onclick="editPrice('${r.d}')">수정</button> <button class="link" onclick="delPrice('${r.d}')">삭제</button></div>
   </div>`
  }).join(""):'<span class="sub">아직 없음</span>'}
-function editPrice(d){$("pd").value=d;loadCurPrice();window.scrollTo({top:0,behavior:"smooth"})}
+let editingPrice=null;
+function editPrice(d){editingPrice=d;$("pd").value=d;loadCurPrice();
+ $("pTitle").textContent="단가 수정";$("pbtn").textContent="수정";$("pResetBtn").style.display="";
+ window.scrollTo({top:0,behavior:"smooth"})}
+function resetPriceForm(){editingPrice=null;$("pd").value=(S&&S.today)||new Date().toISOString().slice(0,10);
+ $("pTitle").textContent="단가 변경";$("pbtn").textContent="저장";$("pResetBtn").style.display="none";loadCurPrice()}
 function confirmSheet(msg,label){return new Promise(res=>{$("shb").innerHTML=`<div>${msg}</div><button class="btn" id="csYes" style="margin-top:10px">${label}</button><button class="btn o" id="csNo" style="margin-top:8px">취소</button>`;
  $("sh").classList.remove("hide");$("csYes").onclick=()=>{cl();res(true)};$("csNo").onclick=()=>{cl();res(false)}})}
 async function delPrice(d){const ok=await confirmSheet(d+" 단가·업체 기록을 삭제합니다. 그 이전 기록으로 되돌아갑니다.","삭제");if(!ok)return;
