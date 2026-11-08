@@ -268,13 +268,11 @@ def delete_price(d: str):
 
 
 class Eatout(BaseModel):
-    d: str; pin: str; on: bool = True
+    d: str; on: bool = True
 
 @app.put("/api/eatout")
 def set_eatout(p: Eatout):
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", p.d): raise HTTPException(400, "잘못된 날짜")
-    with conn() as c0:
-        check_pin(p.pin, c0)
     if p.d not in [x.isoformat() for x in open_dates(now_kst().date())]:
         raise HTTPException(400, "지정할 수 없는 날짜")
     with conn() as c:

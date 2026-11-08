@@ -111,8 +111,8 @@ function openEatout(){const opens=S.open;
  opens.map(d=>{const on=D&&D.eatout&&D.eatout.includes(d);return `<button class="btn o" onclick="toggleEatout('${d}',${!on})" style="margin-top:8px">${+d.slice(5,7)}월 ${+d.slice(8)}일${on?" · 외식 취소":""}</button>`}).join("")+
  `<button class="btn o" id="eoNo" style="margin-top:8px">닫기</button>`;
  $("sh").classList.remove("hide");$("eoNo").onclick=cl}
-async function toggleEatout(d,on){const pin=await askPin((on?d+" 전체를 외식으로 표시합니다. 그날 개인별 선택은 지워지고 식대·패널티에서 빠집니다.":d+" 외식 표시를 취소합니다."));if(pin===null)return;
- try{await api("api/eatout",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({d,pin,on})});toast(on?"외식으로 표시됨":"외식 취소됨");cl();draft={};savedMap={};await cal()}
+async function toggleEatout(d,on){const ok=await confirmSheet((on?d+" 전체를 외식으로 표시합니다. 그날 개인별 선택은 지워지고 식대·패널티에서 빠집니다.":d+" 외식 표시를 취소합니다."),on?"표시":"취소");if(!ok)return;
+ try{await api("api/eatout",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({d,on})});toast(on?"외식으로 표시됨":"외식 취소됨");cl();draft={};savedMap={};await cal()}
  catch(e){toast(e.s==403?"PIN이 틀렸습니다":"처리 실패",1)}}
 function ask(past){return new Promise(res=>{$("shb").innerHTML=`<div class="warn">${past?"⚠ 지난 날짜를 수정합니다.":"08:00이 지났습니다."} 변경 사유를 입력하세요.<br>담당자께 반드시 구두로 공유해야 합니다.</div><textarea id="rs" rows="3" placeholder="사유"></textarea><button class="btn" id="ok">확인</button><button class="btn o" id="no">취소</button>`;
  $("sh").classList.remove("hide");$("no").onclick=()=>{cl();res(null)};$("ok").onclick=()=>{const v=$("rs").value.trim();if(!v){$("rs").focus();return}cl();res(v)}})}
