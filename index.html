@@ -139,7 +139,11 @@ async function savePrice(){const d=$("pd").value;const v=parseInt($("pr").value|
  await api("api/price",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({d,price:v,vendor})});
  toast(d+"부터 저장됨");CA=await api("api/monthly");await loadCurPrice();await loadPriceList();showCost()}
 async function loadPriceList(){const list=await api("api/prices");
- $("plist").innerHTML=list.length?list.map(r=>`<div class="row"><span>${r.d} · ${r.vendor||"업체 미지정"} · ${r.price.toLocaleString("ko-KR")}원</span><span><button class="link" onclick="editPrice('${r.d}')">수정</button> <button class="link" onclick="delPrice('${r.d}')">삭제</button></span></div>`).join(""):'<span class="sub">아직 없음</span>'}
+ $("plist").innerHTML=list.length?list.map((r,i)=>{
+  let until="현재까지";
+  if(i>0){const nd=new Date(list[i-1].d+"T00:00:00");nd.setDate(nd.getDate()-1);until=nd.toISOString().slice(0,10)+"까지"}
+  return `<div class="row"><span>${r.d}~${until} · ${r.vendor||"업체 미지정"} · ${r.price.toLocaleString("ko-KR")}원</span><span><button class="link" onclick="editPrice('${r.d}')">수정</button> <button class="link" onclick="delPrice('${r.d}')">삭제</button></span></div>`
+ }).join(""):'<span class="sub">아직 없음</span>'}
 function editPrice(d){$("pd").value=d;loadCurPrice();window.scrollTo({top:0,behavior:"smooth"})}
 function confirmSheet(msg,label){return new Promise(res=>{$("shb").innerHTML=`<div>${msg}</div><button class="btn" id="csYes" style="margin-top:10px">${label}</button><button class="btn o" id="csNo" style="margin-top:8px">취소</button>`;
  $("sh").classList.remove("hide");$("csYes").onclick=()=>{cl();res(true)};$("csNo").onclick=()=>{cl();res(false)}})}
