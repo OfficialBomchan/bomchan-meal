@@ -168,12 +168,13 @@ def monthly():
     def price_on(d):
         i = bisect.bisect_right(pds, d) - 1  # 그 날짜 이전(포함) 가장 가까운 단가·업체
         return (pps[i], pvs[i]) if i >= 0 else (legacy_price, "")
-    ms, ams, vms = {}, {}, {}  # ym -> {member: 식수} / ym -> {member: 금액} / ym -> {업체: 금액}
+    ms, ams, vms, dms = {}, {}, {}, {}  # ym -> {member: 식수} / {member: 금액} / {업체: 금액} / {member: [날짜,...]}
     for r in meal_rows:
         d, m = r["d"], r["member"]; ym = d[:7]; price, vendor = price_on(d)
         ms.setdefault(ym, {}); ms[ym][m] = ms[ym].get(m, 0) + 1
         ams.setdefault(ym, {}); ams[ym][m] = ams[ym].get(m, 0) + price
         vms.setdefault(ym, {}); vk = vendor or "업체 미지정"; vms[ym][vk] = vms[ym].get(vk, 0) + price
+        dms.setdefault(ym, {}); dms[ym].setdefault(m, []).append(d)
     eo_counts = {}  # ym -> 외식 일수 (식수·식대 집계에는 안 들어감)
     for r in eo_rows:
         ym = r["d"][:7]; eo_counts[ym] = eo_counts.get(ym, 0) + 1
@@ -181,7 +182,7 @@ def monthly():
     for ym in sorted(set(ms) | set(eo_counts)):
         tot = sum(ms.get(ym, {}).values())
         out.append({"ym": ym, "total": tot, "by": ms.get(ym, {}), "amount": sum(ams.get(ym, {}).values()), "by_amount": ams.get(ym, {}),
-                     "by_vendor": vms.get(ym, {}), "eatout": eo_counts.get(ym, 0),
+                     "by_vendor": vms.get(ym, {}), "by_days": dms.get(ym, {}), "eatout": eo_counts.get(ym, 0),
                      "diff": None if prev is None else tot - prev}); prev = tot
     return {"months": out[::-1], "now": now_kst().strftime("%Y-%m")}
 

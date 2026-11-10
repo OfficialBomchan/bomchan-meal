@@ -123,7 +123,10 @@ async function all(){const a=await api("api/all");const ic={"먹음":"●","안�
  (()=>{let n=0;return "<tr><td><b>외식</b></td>"+a.days.map(d=>`<td>${eo.includes(d)?++n:""}</td>`).join("")+"</tr>"})()+
  "</table><p class='sub' style='font-size:12px'>● 먹음 × 안먹음 · 미정</p>"}
 async function mon(){const a=await api("api/monthly");
- $("t2").innerHTML=a.months.length?a.months.map(m=>`<div class="card"><b>${m.ym}</b> ${m.ym==a.now?"(진행 중)":""}<div style="font-size:26px;font-weight:800;color:var(--gd)">${m.total}식 ${m.diff==null?"":`<span style="font-size:14px;color:var(--m)">전월 대비 ${m.diff>0?"+":""}${m.diff}</span>`}</div><div class="sub" style="font-size:13px">${Object.entries(m.by).map(([k,v])=>k+" "+v).join(" · ")}</div>${m.eatout?`<div class="sub" style="font-size:13px;margin-top:2px">외식 ${m.eatout}회</div>`:""}</div>`).join(""):'<div class="card sub">아직 기록이 없습니다.</div>'}
+ $("t2").innerHTML=a.months.length?a.months.map((m,mi)=>`<div class="card"><b>${m.ym}</b> ${m.ym==a.now?"(진행 중)":""}<div style="font-size:26px;font-weight:800;color:var(--gd)">${m.total}식 ${m.diff==null?"":`<span style="font-size:14px;color:var(--m)">전월 대비 ${m.diff>0?"+":""}${m.diff}</span>`}</div>${m.eatout?`<div class="sub" style="font-size:13px;margin-top:2px">외식 ${m.eatout}회</div>`:""}
+  <div style="margin-top:6px">${Object.entries(m.by).map(([k,v],ki)=>`<div style="font-size:13px"><button class="link" onclick="tgd('md${mi}_${ki}')">${k} ${v}</button><div id="md${mi}_${ki}" class="hide sub" style="font-size:12px;margin:2px 0 6px 10px">${(m.by_days[k]||[]).map(md).join(", ")}</div></div>`).join("")}</div>
+ </div>`).join(""):'<div class="card sub">아직 기록이 없습니다.</div>'}
+function tgd(id){$(id).classList.toggle("hide")}
 async function lg(){const a=await api("api/logs");$("t3").innerHTML=a.length?a.map(x=>`<div style="padding:6px 0;border-bottom:1px solid var(--l)"><b>${x.member}</b> ${x.d.slice(5)} ${x.old}→${x.new}<div class="sub" style="font-size:13px">${x.at} · ${x.reason}</div></div>`).join(""):'<span class="sub">08:00 이후 변경 기록이 없습니다.</span>'}
 let CY_=2026,CM_=10,CA=null;
 function monOpts(y){const f=y==2026?10:1;let h="";for(let m=f;m<=12;m++)h+=`<option value="${m}"${m==CM_?" selected":""}>${m}월</option>`;return h}
