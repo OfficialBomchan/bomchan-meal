@@ -178,11 +178,26 @@ def monthly():
     eo_counts = {}  # ym -> 외식 일수 (식수·식대 집계에는 안 들어감)
     for r in eo_rows:
         ym = r["d"][:7]; eo_counts[ym] = eo_counts.get(ym, 0) + 1
+    def vendor_periods(ym):
+        # 그 달 안에서 업체·단가가 바뀐 구간들을(겹치는 부분만 잘라서) 나열한다
+        mstart = datetime.strptime(ym + "-01", "%Y-%m-%d").date()
+        mend = datetime.strptime(nxt(ym) + "-01", "%Y-%m-%d").date()
+        out_p = []
+        for i, pdd in enumerate(pds):
+            p_start = datetime.strptime(pdd, "%Y-%m-%d").date()
+            p_end = datetime.strptime(pds[i + 1], "%Y-%m-%d").date() if i + 1 < len(pds) else None
+            eff_start = max(p_start, mstart)
+            eff_end = min(p_end, mend) if p_end else mend
+            if eff_start < eff_end:
+                out_p.append({"from": eff_start.isoformat(), "to": (eff_end - timedelta(days=1)).isoformat(),
+                               "vendor": pvs[i] or "업체 미지정", "price": pps[i]})
+        return out_p
     out, prev = [], None
     for ym in sorted(set(ms) | set(eo_counts)):
         tot = sum(ms.get(ym, {}).values())
         out.append({"ym": ym, "total": tot, "by": ms.get(ym, {}), "amount": sum(ams.get(ym, {}).values()), "by_amount": ams.get(ym, {}),
                      "by_vendor": vms.get(ym, {}), "by_days": dms.get(ym, {}), "eatout": eo_counts.get(ym, 0),
+                     "vendor_periods": vendor_periods(ym),
                      "diff": None if prev is None else tot - prev}); prev = tot
     return {"months": out[::-1], "now": now_kst().strftime("%Y-%m")}
 
