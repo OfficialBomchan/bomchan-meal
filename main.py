@@ -130,7 +130,7 @@ async def _s():
     init_db(); asyncio.create_task(loop())
 
 @app.get("/")
-def index(): return FileResponse("index.html")
+def index(): return FileResponse("index.html", headers={"Cache-Control": "no-cache, must-revalidate"})
 
 @app.get("/api/state")
 def state():
