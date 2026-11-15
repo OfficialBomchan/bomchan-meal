@@ -66,7 +66,7 @@ function go(n){["v1","v2","v3","v4","v5"].forEach((v,i)=>$(v).classList.toggle("
 function toast(t,r){const e=$("ts");e.textContent=t;e.className="toast"+(r?" r":"");setTimeout(()=>e.classList.add("hide"),r?6000:1800)}
 async function init(){
  $("dow").innerHTML=["월","화","수","목","금"].map(x=>`<div class="dow">${x}</div>`).join("");
- $("tabs").innerHTML=["내 달력","전체 현황","월별 식수","변경 내역"].map((x,i)=>`<button onclick="tb(${i})" id="tb${i}">${x}</button>`).join("");
+ $("tabs").innerHTML=["내 달력","전체 현황","월별 식수","업데이트 내역"].map((x,i)=>`<button onclick="tb(${i})" id="tb${i}">${x}</button>`).join("");
  try{S=await api("api/state");const t=S.today.split("-");Y=+t[0];M=+t[1]}catch(e){}
  $("names").innerHTML=(S?S.members:[]).map(m=>`<button onclick="pick('${m}')">${m}</button>`).join("")}
 async function pick(m){me=m;draft={};savedMap={};try{localStorage.setItem("me",m)}catch(e){}if(!S){try{S=await api("api/state")}catch(e){toast("서버에 연결할 수 없습니다",1);return}}const t=S.today.split("-");Y=+t[0];M=+t[1];tab=0;go(3)}
@@ -128,7 +128,7 @@ async function mon(){const a=await api("api/monthly");
   <div style="margin-top:6px">${Object.entries(m.by).map(([k,v],ki)=>`<div style="font-size:13px"><button class="link" onclick="tgd('md${mi}_${ki}')">${k} ${v}</button><div id="md${mi}_${ki}" class="hide sub" style="font-size:12px;margin:2px 0 6px 10px">${(m.by_days[k]||[]).map(md).join(", ")}</div></div>`).join("")}</div>
  </div>`).join(""):'<div class="card sub">아직 기록이 없습니다.</div>'}
 function tgd(id){$(id).classList.toggle("hide")}
-async function lg(){const a=await api("api/logs");$("t3").innerHTML=a.length?a.map(x=>`<div style="padding:6px 0;border-bottom:1px solid var(--l)"><b>${x.member}</b> ${x.d.slice(5)} ${x.old}→${x.new}<div class="sub" style="font-size:13px">${x.at} · ${x.reason}</div></div>`).join(""):'<span class="sub">08:00 이후 변경 기록이 없습니다.</span>'}
+async function lg(){const a=await api("api/updates");$("t3").innerHTML=a.length?a.map(x=>`<div style="padding:8px 0;border-bottom:1px solid var(--l)"><b>${x.title}</b><div class="sub" style="font-size:13px;margin-top:2px">${x.desc}</div><div class="sub" style="font-size:12px;margin-top:2px">${x.d}</div></div>`).join(""):'<span class="sub">업데이트 내역이 없습니다.</span>'}
 let CY_=2026,CM_=10,CA=null;
 function monOpts(y){const f=y==2026?10:1;let h="";for(let m=f;m<=12;m++)h+=`<option value="${m}"${m==CM_?" selected":""}>${m}월</option>`;return h}
 async function openCost(){go(4);if(!S)try{S=await api("api/state")}catch(e){}

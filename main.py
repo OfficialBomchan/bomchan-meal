@@ -7,6 +7,16 @@ from pydantic import BaseModel
 from kr_holidays import HOLIDAYS
 
 MEMBERS = ["JH","PH","SH","BK","DJ","MW","TS","HS","HM","JS"]
+# "업데이트 내역" 탭에 보여주는 프로그램 변경 이력. 새 기능을 배포할 때마다 맨 위에 추가한다.
+UPDATES = [
+    {"d": "2026-11-11", "title": "월별 식수에 업체 변경 표시", "desc": "업체가 월 중간에 바뀌면 그 구간(예: 11/1~11/5 A식당 → 11/6~11/30 B식당)을 보여줍니다."},
+    {"d": "2026-11-10", "title": "월별 식수에서 날짜별 식사 내역 보기", "desc": "구성원 이름을 누르면 그 달에 실제로 먹은 날짜 목록이 펼쳐집니다."},
+    {"d": "2026-11-09", "title": "외식 표시 개선 및 계정 정리", "desc": "전체 현황의 외식 표시를 순번 숫자로 바꾸고, 쓰지 않는 헬퍼 계정을 정리했습니다."},
+    {"d": "2026-11-08", "title": "외식 기능 다듬기", "desc": "외식 표시를 관리자 PIN 없이 쓸 수 있게 하고, 달력에 초록 동그라미로 표시하도록 바꿨습니다. 식대 관리 단가 이력에 수정 모드를 추가했습니다."},
+    {"d": "2026-11-07", "title": "식대 관리에 업체명 추가", "desc": "단가와 함께 업체명을 기록하고, 월별로 업체별 식대·단가 변경 이력을 볼 수 있습니다."},
+    {"d": "2026-11-05", "title": "월별 식수 집계 수정", "desc": "앞으로 먹을 예정인 식수는 빼고, 실제로 지난 식수만 집계하도록 고쳤습니다."},
+    {"d": "2026-11-04", "title": "날짜별 단가 지원", "desc": "월 중간에 단가가 바뀌어도(업체 변경 등) 날짜별로 정확히 계산되도록 바꿨습니다."},
+]
 STATUSES = ("먹음","미정","안먹음")
 CUTOFF = 8
 AHEAD = 5
@@ -237,8 +247,13 @@ def put(p: Put):
 
 @app.get("/api/logs")
 def logs():
+    # 식수 변경 기록은 화면에는 더 이상 안 보여주지만, 정산 대조 등을 위해 DB에는 계속 남긴다.
     with conn() as c:
         return c.q("SELECT at,member,d,old,new,reason FROM logs ORDER BY id DESC LIMIT 30").fetchall() and [dict(r) for r in c.q("SELECT at,member,d,old,new,reason FROM logs ORDER BY id DESC LIMIT 30").fetchall()] or []
+
+@app.get("/api/updates")
+def updates():
+    return sorted(UPDATES, key=lambda x: x["d"], reverse=True)
 
 
 def effective_price(c, d):
