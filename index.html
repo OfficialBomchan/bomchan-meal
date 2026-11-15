@@ -128,7 +128,7 @@ async function mon(){const a=await api("api/monthly");
   <div style="margin-top:6px">${Object.entries(m.by).map(([k,v],ki)=>`<div style="font-size:13px"><button class="link" onclick="tgd('md${mi}_${ki}')">${k} ${v}</button><div id="md${mi}_${ki}" class="hide sub" style="font-size:12px;margin:2px 0 6px 10px">${(m.by_days[k]||[]).map(md).join(", ")}</div></div>`).join("")}</div>
  </div>`).join(""):'<div class="card sub">아직 기록이 없습니다.</div>'}
 function tgd(id){$(id).classList.toggle("hide")}
-async function lg(){const a=await api("api/updates");$("t3").innerHTML=a.length?a.map(x=>`<div style="padding:8px 0;border-bottom:1px solid var(--l)"><b>${x.title}</b><div class="sub" style="font-size:13px;margin-top:2px">${x.desc}</div><div class="sub" style="font-size:12px;margin-top:2px">${x.d}</div></div>`).join(""):'<span class="sub">업데이트 내역이 없습니다.</span>'}
+async function lg(){const a=await api("api/updates");$("t3").innerHTML=a.length?a.map(x=>`<div style="padding:8px 0;border-bottom:1px solid var(--l)"><b>${x.title}</b><div class="sub" style="font-size:13px;margin-top:2px">${x.detail}</div><div class="sub" style="font-size:12px;margin-top:2px">${x.d}</div></div>`).join(""):'<span class="sub">업데이트 내역이 없습니다.</span>'}
 let CY_=2026,CM_=10,CA=null;
 function monOpts(y){const f=y==2026?10:1;let h="";for(let m=f;m<=12;m++)h+=`<option value="${m}"${m==CM_?" selected":""}>${m}월</option>`;return h}
 async function openCost(){go(4);if(!S)try{S=await api("api/state")}catch(e){}

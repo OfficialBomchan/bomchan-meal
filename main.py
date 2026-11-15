@@ -10,13 +10,13 @@ MEMBERS = ["JH","PH","SH","BK","DJ","MW","TS","HS","HM","JS"]
 # "업데이트 내역" 탭에 보여줄 초기 이력(최초 설치 때만 DB에 한 번 심는 용도). 이후로는
 # POST /api/updates로 DB(updates 테이블)에 바로 추가한다 - 정산 알림 등 다른 작업도 코드 배포 없이 추가 가능.
 SEED_UPDATES = [
-    {"d": "2026-11-11", "title": "월별 식수에 업체 변경 표시", "desc": "업체가 월 중간에 바뀌면 그 구간(예: 11/1~11/5 A식당 → 11/6~11/30 B식당)을 보여줍니다."},
-    {"d": "2026-11-10", "title": "월별 식수에서 날짜별 식사 내역 보기", "desc": "구성원 이름을 누르면 그 달에 실제로 먹은 날짜 목록이 펼쳐집니다."},
-    {"d": "2026-11-09", "title": "외식 표시 개선 및 계정 정리", "desc": "전체 현황의 외식 표시를 순번 숫자로 바꾸고, 쓰지 않는 헬퍼 계정을 정리했습니다."},
-    {"d": "2026-11-08", "title": "외식 기능 다듬기", "desc": "외식 표시를 관리자 PIN 없이 쓸 수 있게 하고, 달력에 초록 동그라미로 표시하도록 바꿨습니다. 식대 관리 단가 이력에 수정 모드를 추가했습니다."},
-    {"d": "2026-11-07", "title": "식대 관리에 업체명 추가", "desc": "단가와 함께 업체명을 기록하고, 월별로 업체별 식대·단가 변경 이력을 볼 수 있습니다."},
-    {"d": "2026-11-05", "title": "월별 식수 집계 수정", "desc": "앞으로 먹을 예정인 식수는 빼고, 실제로 지난 식수만 집계하도록 고쳤습니다."},
-    {"d": "2026-11-04", "title": "날짜별 단가 지원", "desc": "월 중간에 단가가 바뀌어도(업체 변경 등) 날짜별로 정확히 계산되도록 바꿨습니다."},
+    {"d": "2026-11-11", "title": "월별 식수에 업체 변경 표시", "detail": "업체가 월 중간에 바뀌면 그 구간(예: 11/1~11/5 A식당 → 11/6~11/30 B식당)을 보여줍니다."},
+    {"d": "2026-11-10", "title": "월별 식수에서 날짜별 식사 내역 보기", "detail": "구성원 이름을 누르면 그 달에 실제로 먹은 날짜 목록이 펼쳐집니다."},
+    {"d": "2026-11-09", "title": "외식 표시 개선 및 계정 정리", "detail": "전체 현황의 외식 표시를 순번 숫자로 바꾸고, 쓰지 않는 헬퍼 계정을 정리했습니다."},
+    {"d": "2026-11-08", "title": "외식 기능 다듬기", "detail": "외식 표시를 관리자 PIN 없이 쓸 수 있게 하고, 달력에 초록 동그라미로 표시하도록 바꿨습니다. 식대 관리 단가 이력에 수정 모드를 추가했습니다."},
+    {"d": "2026-11-07", "title": "식대 관리에 업체명 추가", "detail": "단가와 함께 업체명을 기록하고, 월별로 업체별 식대·단가 변경 이력을 볼 수 있습니다."},
+    {"d": "2026-11-05", "title": "월별 식수 집계 수정", "detail": "앞으로 먹을 예정인 식수는 빼고, 실제로 지난 식수만 집계하도록 고쳤습니다."},
+    {"d": "2026-11-04", "title": "날짜별 단가 지원", "detail": "월 중간에 단가가 바뀌어도(업체 변경 등) 날짜별로 정확히 계산되도록 바꿨습니다."},
 ]
 STATUSES = ("먹음","미정","안먹음")
 CUTOFF = 8
@@ -69,10 +69,10 @@ def init_db():
         c.q("CREATE TABLE IF NOT EXISTS eatout(d TEXT PRIMARY KEY)")
         # "업데이트 내역" 탭에 쓰임. 프로그램 변경 소식뿐 아니라, 다른 작업(예: 월말 정산)이 끝났다는
         # 알림도 POST /api/updates로 여기 추가할 수 있다 - 코드를 안 고치고도 알림을 띄울 수 있음.
-        c.q(f"CREATE TABLE IF NOT EXISTS updates(id {ai}, d TEXT NOT NULL, title TEXT NOT NULL, desc TEXT NOT NULL)")
+        c.q(f"CREATE TABLE IF NOT EXISTS updates(id {ai}, d TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL)")  # 'desc'는 SQL 예약어라 못 씀
         if not c.q("SELECT 1 FROM updates LIMIT 1").fetchone():
             for u in SEED_UPDATES:
-                c.q("INSERT INTO updates(d,title,desc) VALUES(?,?,?)", (u["d"], u["title"], u["desc"]))
+                c.q("INSERT INTO updates(d,title,detail) VALUES(?,?,?)", (u["d"], u["title"], u["detail"]))
         c.q("INSERT INTO meta VALUES('admin_pin','0000') ON CONFLICT DO NOTHING")
         now = datetime.now(KST)
         c.q("INSERT INTO meta VALUES('start',?) ON CONFLICT DO NOTHING", (now.date().isoformat(),))
@@ -261,19 +261,19 @@ def logs():
 @app.get("/api/updates")
 def list_updates():
     with conn() as c:
-        rows = c.q("SELECT d,title,desc FROM updates ORDER BY d DESC, id DESC").fetchall()
+        rows = c.q("SELECT d,title,detail FROM updates ORDER BY d DESC, id DESC").fetchall()
     return [dict(r) for r in rows]
 
 class UpdateAdd(BaseModel):
-    d: str; title: str; desc: str; pin: str
+    d: str; title: str; detail: str; pin: str
 
 @app.post("/api/updates")
 def add_update(p: UpdateAdd):
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", p.d): raise HTTPException(400, "잘못된 날짜")
-    if not p.title.strip() or not p.desc.strip(): raise HTTPException(400, "제목·내용을 확인하세요")
+    if not p.title.strip() or not p.detail.strip(): raise HTTPException(400, "제목·내용을 확인하세요")
     with conn() as c:
         check_pin(p.pin, c)
-        c.q("INSERT INTO updates(d,title,desc) VALUES(?,?,?)", (p.d, p.title.strip(), p.desc.strip()))
+        c.q("INSERT INTO updates(d,title,detail) VALUES(?,?,?)", (p.d, p.title.strip(), p.detail.strip()))
         c.commit()
     return {"ok": True}
 
