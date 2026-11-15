@@ -7,8 +7,9 @@ from pydantic import BaseModel
 from kr_holidays import HOLIDAYS
 
 MEMBERS = ["JH","PH","SH","BK","DJ","MW","TS","HS","HM","JS"]
-# "업데이트 내역" 탭에 보여주는 프로그램 변경 이력. 새 기능을 배포할 때마다 맨 위에 추가한다.
-UPDATES = [
+# "업데이트 내역" 탭에 보여줄 초기 이력(최초 설치 때만 DB에 한 번 심는 용도). 이후로는
+# POST /api/updates로 DB(updates 테이블)에 바로 추가한다 - 정산 알림 등 다른 작업도 코드 배포 없이 추가 가능.
+SEED_UPDATES = [
     {"d": "2026-11-11", "title": "월별 식수에 업체 변경 표시", "desc": "업체가 월 중간에 바뀌면 그 구간(예: 11/1~11/5 A식당 → 11/6~11/30 B식당)을 보여줍니다."},
     {"d": "2026-11-10", "title": "월별 식수에서 날짜별 식사 내역 보기", "desc": "구성원 이름을 누르면 그 달에 실제로 먹은 날짜 목록이 펼쳐집니다."},
     {"d": "2026-11-09", "title": "외식 표시 개선 및 계정 정리", "desc": "전체 현황의 외식 표시를 순번 숫자로 바꾸고, 쓰지 않는 헬퍼 계정을 정리했습니다."},
@@ -66,6 +67,12 @@ def init_db():
         except Exception: (c.c.connection if c.pg else c.db).rollback()
         # 단체 외식일. 식대·패널티 계산에서 빠지고, 그날 개인별 체크는 잠긴다.
         c.q("CREATE TABLE IF NOT EXISTS eatout(d TEXT PRIMARY KEY)")
+        # "업데이트 내역" 탭에 쓰임. 프로그램 변경 소식뿐 아니라, 다른 작업(예: 월말 정산)이 끝났다는
+        # 알림도 POST /api/updates로 여기 추가할 수 있다 - 코드를 안 고치고도 알림을 띄울 수 있음.
+        c.q(f"CREATE TABLE IF NOT EXISTS updates(id {ai}, d TEXT NOT NULL, title TEXT NOT NULL, desc TEXT NOT NULL)")
+        if not c.q("SELECT 1 FROM updates LIMIT 1").fetchone():
+            for u in SEED_UPDATES:
+                c.q("INSERT INTO updates(d,title,desc) VALUES(?,?,?)", (u["d"], u["title"], u["desc"]))
         c.q("INSERT INTO meta VALUES('admin_pin','0000') ON CONFLICT DO NOTHING")
         now = datetime.now(KST)
         c.q("INSERT INTO meta VALUES('start',?) ON CONFLICT DO NOTHING", (now.date().isoformat(),))
@@ -252,8 +259,23 @@ def logs():
         return c.q("SELECT at,member,d,old,new,reason FROM logs ORDER BY id DESC LIMIT 30").fetchall() and [dict(r) for r in c.q("SELECT at,member,d,old,new,reason FROM logs ORDER BY id DESC LIMIT 30").fetchall()] or []
 
 @app.get("/api/updates")
-def updates():
-    return sorted(UPDATES, key=lambda x: x["d"], reverse=True)
+def list_updates():
+    with conn() as c:
+        rows = c.q("SELECT d,title,desc FROM updates ORDER BY d DESC, id DESC").fetchall()
+    return [dict(r) for r in rows]
+
+class UpdateAdd(BaseModel):
+    d: str; title: str; desc: str; pin: str
+
+@app.post("/api/updates")
+def add_update(p: UpdateAdd):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", p.d): raise HTTPException(400, "잘못된 날짜")
+    if not p.title.strip() or not p.desc.strip(): raise HTTPException(400, "제목·내용을 확인하세요")
+    with conn() as c:
+        check_pin(p.pin, c)
+        c.q("INSERT INTO updates(d,title,desc) VALUES(?,?,?)", (p.d, p.title.strip(), p.desc.strip()))
+        c.commit()
+    return {"ok": True}
 
 
 def effective_price(c, d):
