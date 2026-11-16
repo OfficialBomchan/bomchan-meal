@@ -30,7 +30,7 @@ textarea{width:100%;padding:10px;border:1px solid var(--l);border-radius:10px;fo
 </style></head><body><div class="w">
 
 <div id="v1"><h1>봄찬 점심 체크</h1><p class="sub">봄찬 점심밥 인원을 위한 앱입니다.</p>
-<div class="card"><b>이렇게 사용합니다</b><p>① 내 이름을 고릅니다.<br>② 달력에서 날짜를 눌러 먹음 / 안먹음을 선택합니다.<br>③ 오늘부터 근무일 5일 뒤까지 미리 선택할 수 있습니다.<br>④ 식사 당번이 매주 돌아가며 식사 관련 업무를 맡습니다. 당번은 BK → JH → MW → PH → SH 순으로 매주 바뀌고, 그 주 당번이 쉬면 다음 당번이 대신합니다. <span id="dutyList"></span></p>
+<div class="card"><b>이렇게 사용합니다</b><p>① 내 이름을 고릅니다.<br>② 달력에서 날짜를 눌러 먹음 / 안먹음을 선택합니다.<br>③ 오늘부터 근무일 5일 뒤까지 미리 선택할 수 있습니다.<br>④ 식사 당번이 매주 돌아가며 식사 관련 업무를 맡습니다. 당번은 <span id="dn0">BK</span> → <span id="dn1">JH</span> → <span id="dn2">MW</span> → <span id="dn3">PH</span> → <span id="dn4">SH</span> 순으로 매주 바뀌고, 그 주 당번이 쉬면 다음 당번이 대신합니다.</p>
 <p><b>당일 08:00까지 미정이면 패널티 +1</b>, 08:00 이후 변경은 사유 입력과 담당자께 구두 공유가 필요합니다.</p></div>
 <button class="btn" onclick="go(2)">다음</button><button class="btn o" style="margin-top:10px" onclick="openCost()">식대 관리</button><button class="btn o" style="margin-top:10px" onclick="openMembers()">구성원 관리</button></div>
 
@@ -195,9 +195,9 @@ async function restoreMember(name){const pin=await askPin(`'${name}' 복귀`);if
  try{await api("api/members/"+encodeURIComponent(name),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({active:true,pin})});toast("복귀됨");await loadMembers();S=null;await init()}
  catch(e){toast(e.s==403?"PIN이 틀렸습니다":"복귀 실패",1)}}
 function weekMon(d){const x=new Date(d);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);x.setHours(0,0,0,0);return x}
-function showDuty(){const names=["BK","JH","MW","PH","SH"];const anchor=weekMon(new Date(2026,10,16));
+function showDuty(){const anchor=weekMon(new Date(2026,10,16));
  const diff=Math.round((weekMon(new Date())-anchor)/(7*86400000));const idx=((diff%5)+5)%5;
- $("dutyList").innerHTML=names.map((n,i)=>i==idx?`<span class="duty-on">${n}</span>`:n).join(" ")}
+ for(let i=0;i<5;i++)$("dn"+i).classList.toggle("duty-on",i==idx)}
 showDuty();
 init().then(()=>{go(1)});
 setInterval(()=>{if(!$("v3").classList.contains("hide")&&$("sh").classList.contains("hide"))load()},60000);
