@@ -132,7 +132,7 @@ async function mon(){const a=await api("api/monthly");
   ${Object.keys(m.by_vendor||{}).length>1?`<table style="margin-top:8px"><tr><th style="text-align:left">업체</th><th style="text-align:right">식수</th><th style="text-align:right">식대</th></tr>${Object.entries(m.by_vendor).sort((a,b)=>b[1]-a[1]).map(([v,amt])=>`<tr><td style="text-align:left">${v}</td><td style="text-align:right">${vendorDayCount(m,v)}</td><td style="text-align:right">${amt.toLocaleString("ko-KR")}원</td></tr>`).join("")}</table>`:""}
   <div style="margin-top:6px">${Object.entries(m.by).map(([k,v],ki)=>{const dates=m.by_days[k]||[];const vp=m.vendor_periods||[];let vendorLines="";
    if(vp.length>1){const cnt={};for(const d of dates){const p=vp.find(p=>d>=p.from&&d<=p.to);const key=p?p.vendor:"기타";cnt[key]=(cnt[key]||0)+1}
-    vendorLines=Object.entries(cnt).map(([ven,c])=>`<div class="sub" style="font-size:12px;margin:2px 0 0 10px">${ven} ${c}</div>`).join("")}
+    vendorLines=`<div class="sub" style="font-size:12px;margin:2px 0 0 10px">${Object.entries(cnt).map(([ven,c])=>`${ven} ${c}`).join(" · ")}</div>`}
    return `<div style="font-size:13px;margin-top:4px"><button class="link" onclick="tgd('md${mi}_${ki}')">${k} ${v}</button>${vendorLines}<div id="md${mi}_${ki}" class="hide sub" style="font-size:12px;margin:2px 0 6px 10px">${dates.map(md).join(", ")}</div></div>`
   }).join("")}</div>
  </div>`).join(""):'<div class="card sub">아직 기록이 없습니다.</div>'}
