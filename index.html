@@ -127,15 +127,19 @@ function vendorDayCount(m,vendor){const vp=m.vendor_periods||[];let n=0;
  for(const dates of Object.values(m.by_days||{}))for(const d of dates){const p=vp.find(p=>d>=p.from&&d<=p.to);if((p?p.vendor:"기타")===vendor)n++}
  return n}
 async function mon(){const a=await api("api/monthly");
- $("t2").innerHTML=a.months.length?a.months.map((m,mi)=>`<div class="card"><b>${m.ym}</b> ${m.ym==a.now?"(진행 중)":""}<div style="font-size:26px;font-weight:800;color:var(--gd)">${m.total}식 ${m.diff==null?"":`<span style="font-size:14px;color:var(--m)">전월 대비 ${m.diff>0?"+":""}${m.diff}</span>`}</div>${m.eatout?`<div class="sub" style="font-size:13px;margin-top:2px">외식 ${m.eatout}회</div>`:""}
+ $("t2").innerHTML=a.months.length?a.months.map((m,mi)=>`<div class="card"><b>${m.ym}</b> ${m.ym==a.now?"(진행 중)":""}<button class="link" id="tgmbtn${mi}" onclick="tgm(${mi})" style="float:right">접기</button><div style="font-size:26px;font-weight:800;color:var(--gd)">${m.total}식 ${m.diff==null?"":`<span style="font-size:14px;color:var(--m)">전월 대비 ${m.diff>0?"+":""}${m.diff}</span>`}</div>
+  <div id="mdetail${mi}">
+  ${m.eatout?`<div class="sub" style="font-size:13px;margin-top:2px">외식 ${m.eatout}회</div>`:""}
   ${(m.vendor_periods||[]).length?`<div class="sub" style="font-size:12px;margin-top:2px">${m.vendor_periods.length>1?"업체 변경: ":"업체: "}${m.vendor_periods.map(p=>`${md(p.from)}~${md(p.to)} ${p.vendor}(${p.price.toLocaleString("ko-KR")}원)`).join(" → ")}</div>`:""}
   ${Object.keys(m.by_vendor||{}).length>1?`<table style="margin-top:8px"><tr><th style="text-align:left">업체</th><th style="text-align:right">식수</th><th style="text-align:right">식대</th></tr>${Object.entries(m.by_vendor).sort((a,b)=>b[1]-a[1]).map(([v,amt])=>`<tr><td style="text-align:left">${v}</td><td style="text-align:right">${vendorDayCount(m,v)}</td><td style="text-align:right">${amt.toLocaleString("ko-KR")}원</td></tr>`).join("")}</table>`:""}
   <div style="margin-top:6px">${Object.entries(m.by).map(([k,v],ki)=>{const dates=m.by_days[k]||[];const vp=m.vendor_periods||[];let vendorLine="";
    if(vp.length>1){const cnt={};for(const d of dates){const p=vp.find(p=>d>=p.from&&d<=p.to);const key=p?p.vendor:"기타";cnt[key]=(cnt[key]||0)+1}
-    vendorLine=`<div>${Object.entries(cnt).map(([ven,c])=>`${ven} ${c}`).join(" · ")}</div>`}
-   return `<div style="font-size:13px;margin-top:4px"><button class="link" onclick="tgd('md${mi}_${ki}')">${k} ${v}</button><div id="md${mi}_${ki}" class="hide sub" style="font-size:12px;margin:2px 0 6px 10px">${vendorLine}${dates.map(md).join(", ")}</div></div>`
+    vendorLine=`<div class="sub" style="font-size:12px;margin:2px 0 0 10px">${Object.entries(cnt).map(([ven,c])=>`${ven} ${c}`).join(" · ")}</div>`}
+   return `<div style="font-size:13px;margin-top:4px"><button class="link" onclick="tgd('md${mi}_${ki}')">${k} ${v}</button>${vendorLine}<div id="md${mi}_${ki}" class="hide sub" style="font-size:12px;margin:2px 0 6px 10px">${dates.map(md).join(", ")}</div></div>`
   }).join("")}</div>
+  </div>
  </div>`).join(""):'<div class="card sub">아직 기록이 없습니다.</div>'}
+function tgm(mi){const d=$("mdetail"+mi);const hidden=d.classList.toggle("hide");$("tgmbtn"+mi).textContent=hidden?"펼치기":"접기"}
 function tgd(id){$(id).classList.toggle("hide")}
 async function lg(){const a=await api("api/updates");$("t3").innerHTML=a.length?a.map(x=>`<div style="padding:8px 0;border-bottom:1px solid var(--l)"><b>${x.title}</b><div class="sub" style="font-size:13px;margin-top:2px">${x.detail}</div><div class="sub" style="font-size:12px;margin-top:2px">${x.d}</div></div>`).join(""):'<span class="sub">업데이트 내역이 없습니다.</span>'}
 let CY_=2026,CM_=10,CA=null;
